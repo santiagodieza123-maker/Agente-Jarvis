@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import re
+import secrets
 import struct
 import time
 from typing import Any, Callable
@@ -53,7 +54,7 @@ def sign(key: bytes, req: dict) -> str:
 
 
 def make_request(key: bytes, op: str, args: dict | None = None, rid: str | None = None, now: float | None = None) -> dict:
-    req = {"v": VERSION, "id": rid or hashlib.sha256(f"{time.time_ns()}{op}".encode()).hexdigest()[:16], "ts": now if now is not None else time.time(),
+    req = {"v": VERSION, "id": rid or secrets.token_hex(8), "ts": now if now is not None else time.time(),
            "op": op, "args": args or {}}
     req["mac"] = sign(key, req)
     return req

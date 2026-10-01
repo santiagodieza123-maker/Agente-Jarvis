@@ -22,6 +22,10 @@ OPEN_EXISTING = 3
 
 k32.CreateNamedPipeW.restype = wt.HANDLE
 k32.CreateFileW.restype = wt.HANDLE
+k32.GetCurrentProcess.restype = wt.HANDLE                       # pseudo-handle -1: sin restype truncaría a 32 bits
+adv.OpenProcessToken.argtypes = [wt.HANDLE, wt.DWORD, ctypes.POINTER(wt.HANDLE)]
+adv.GetTokenInformation.argtypes = [wt.HANDLE, ctypes.c_int, ctypes.c_void_p, wt.DWORD, ctypes.POINTER(wt.DWORD)]
+k32.CloseHandle.argtypes = [wt.HANDLE]
 for fn in (k32.ReadFile, k32.WriteFile):
     fn.argtypes = [wt.HANDLE, ctypes.c_void_p, wt.DWORD, ctypes.POINTER(wt.DWORD), ctypes.c_void_p]
 
@@ -120,9 +124,16 @@ def serve(core, name: str, ready=None) -> None:
                     resp = core.handle_raw(read_message(h))
                 except ProtocolError as e:
                     resp = {"id": "?", "ok": False, "error": str(e)}
-                _write_all(h, frame(resp))
-                k32.FlushFileBuffers(h)
-                k32.DisconnectNamedPipe(h)
+                except OSError:
+                    continue                                                           # cliente cortado a media lectura: el broker sigue
+                except Exception as e:                                                 # una petición mal formada nunca tumba el servicio
+                    resp = {"id": "?", "ok": False, "error": f"error interno: {type(e).__name__}"}
+                try:
+                    _write_all(h, frame(resp))
+                    k32.FlushFileBuffers(h)
+                    k32.DisconnectNamedPipe(h)
+                except OSError:
+                    pass
             finally:
                 k32.CloseHandle(h)
     finally:
@@ -132,6 +143,7 @@ def serve(core, name: str, ready=None) -> None:
 def call(name: str, request: dict, timeout: float = 30.0) -> dict:
     """Cliente: abre la tubería, envía una petición firmada y devuelve la respuesta."""
     deadline = time.time() + timeout
+    gap = time.time() + 1.0                                                            # entre dos conexiones la tubería se recrea: ese hueco no es "broker caído"
     while True:
         h = k32.CreateFileW(name, GENERIC_RW, 0, None, OPEN_EXISTING, 0, None)
         if h not in (None, INVALID):
@@ -139,6 +151,9 @@ def call(name: str, request: dict, timeout: float = 30.0) -> dict:
         err = ctypes.get_last_error()
         if err == ERROR_PIPE_BUSY and time.time() < deadline:
             k32.WaitNamedPipeW(name, 500)
+            continue
+        if err == 2 and time.time() < min(gap, deadline):
+            time.sleep(0.05)
             continue
         raise ConnectionError("el broker elevado no está en marcha" if err == 2 else f"no se pudo abrir la tubería del broker (error {err})")
     try:
