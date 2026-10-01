@@ -61,3 +61,13 @@ select { min-width: 9.5rem; }
 .cfg .check { display: flex; gap: 8px; align-items: center; font-size: .8rem; margin-top: 6px; } .cfg .check input { width: auto; }
 nav button { min-width: 0; padding-inline: 2px; letter-spacing: .08em; white-space: nowrap; overflow: hidden; text-overflow: clip; }
 @media (max-width: 1000px) { nav button { font-size: .6rem; letter-spacing: .02em; } }
+
+.exts { overflow-y: auto; } .exts > * { flex-shrink: 0; } .exts ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ext { border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); border-radius: 4px; padding: 8px; display: grid; gap: 6px; min-width: 0; }
+.ext .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .ext .row input[type=checkbox] { width: auto; }
+.ext .cmd { font-size: .72rem; opacity: .75; overflow-wrap: anywhere; } .exts .hint { font-size: .78rem; opacity: .8; margin: 0 0 8px; }
+.badge { font-size: .65rem; padding: 1px 8px; border-radius: 10px; border: 1px solid currentColor; } .badge.running { color: #35e08a; } .badge.error { color: #ff5a5a; } .badge.starting { color: #ffc247; } .badge.stopped { opacity: .6; }
+.exttools { width: 100%; border-collapse: collapse; font-size: .78rem; } .exttools th { text-align: left; font-weight: normal; opacity: .7; font-size: .68rem; } .exttools td, .exttools th { padding: 3px 6px; }
+.exttools td:nth-child(n+2), .exttools th:nth-child(n+2) { width: 52px; text-align: center; } .exttools td input { width: auto; } .exttools small { display: block; opacity: .65; overflow-wrap: anywhere; }
+.extlog { max-height: 130px; overflow: auto; font-size: .7rem; background: rgba(0,0,0,.35); padding: 6px; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.addext { display: grid; gap: 6px; }

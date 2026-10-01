@@ -2,7 +2,7 @@
 export const EVENT_TYPES = [
   "plan.updated", "action.started", "action.finished", "perception.frame",
   "approval.requested", "approval.granted", "approval.denied",
-  "memory.changed", "permissions.changed", "config.changed", "audit.changed", "audit.appended", "audit.verified", "ui.notice", "state.changed", "kill.triggered",
+  "memory.changed", "permissions.changed", "config.changed", "extensions.changed", "audit.changed", "audit.appended", "audit.verified", "ui.notice", "state.changed", "kill.triggered",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -41,6 +41,13 @@ export type HudMessage =
   | { type: "config.set_api_key"; key: string }
   | { type: "config.clear_api_key" }
   | { type: "config.test_llm" }
+  | { type: "extensions.get" }
+  | { type: "extensions.add"; name: string; command: string; confirmed: true }
+  | { type: "extensions.remove"; name: string }
+  | { type: "extensions.set_enabled"; name: string; enabled: boolean }
+  | { type: "extensions.restart"; name: string }
+  | { type: "extensions.set_trust"; name: string; tool: string; read: boolean }
+  | { type: "extensions.set_tool"; name: string; tool: string; enabled: boolean }
   | { type: "audit.get"; limit?: number; event?: string; text?: string }
   | { type: "audit.verify" };
 
@@ -82,4 +89,16 @@ export function asConfig(p: Record<string, unknown>): ConfigSnapshot | null {
     && !!u && typeof u === "object" && ["calls", "input", "output"].every((n) => typeof u[n] === "number")
     && !!f && typeof f.kill_hotkey === "string" && !!p.spec && typeof p.spec === "object" && isArr(p.accents) && isArr(p.restart) && typeof p.llm_ready === "boolean";
   return ok ? (p as unknown as ConfigSnapshot) : null;
+}
+
+export interface ExtTool { name: string; raw: string; description: string; trusted: boolean; enabled: boolean }
+export interface Extension { name: string; command: string; enabled: boolean; state: "stopped" | "starting" | "running" | "error"; error: string; tools: ExtTool[]; log: string }
+export interface ExtensionsSnapshot { extensions: Extension[]; limits: { extensions: number; tools: number } }
+export function asExtensions(p: Record<string, unknown>): ExtensionsSnapshot | null {
+  if (!isArr(p.extensions) || !p.limits || typeof p.limits !== "object") return null;
+  const ok = (p.extensions as Record<string, unknown>[]).every((e) =>
+    !!e && typeof e.name === "string" && typeof e.command === "string" && typeof e.enabled === "boolean" && typeof e.state === "string"
+    && typeof e.error === "string" && typeof e.log === "string" && isArr(e.tools)
+    && (e.tools as Record<string, unknown>[]).every((t) => !!t && typeof t.name === "string" && typeof t.raw === "string" && typeof t.trusted === "boolean" && typeof t.enabled === "boolean"));
+  return ok ? (p as unknown as ExtensionsSnapshot) : null;
 }

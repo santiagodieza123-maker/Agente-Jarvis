@@ -53,16 +53,20 @@ class HudHandlers:
             self.bus.publish("plan.updated", {"text": f"La tarea falló: {type(e).__name__}"})
             self.bus.publish("state.changed", {"state": "idle"})
 
-    async def panic(self) -> None:
-        self.audit.append("kill.triggered", source="hud")
-        self.bus.publish("kill.triggered", {"source": "hud"})
+    async def cleanup(self) -> None:
+        """Termina a los hijos (shell, navegador, extensiones). Nunca falla: se usa en el pánico y en el cierre ordenado."""
         for hook in self.panic_hooks:   # sin watchdog delante, los hijos quedarían huérfanos
             try:
                 res = hook()
                 if asyncio.iscoroutine(res):
                     await asyncio.wait_for(res, 2)
             except Exception:
-                pass                    # el pánico nunca debe fallar por una limpieza
+                pass
+
+    async def panic(self) -> None:
+        self.audit.append("kill.triggered", source="hud")
+        self.bus.publish("kill.triggered", {"source": "hud"})
+        await self.cleanup()
         await asyncio.sleep(0.15)  # deja salir el evento hacia el HUD
         # Con watchdog, además, el Job Object (KILL_ON_JOB_CLOSE) elimina a cualquier hijo que quede.
         self.exit_fn(1)

@@ -1,5 +1,5 @@
 import { MAX_ROWS, asAudit, asRecord, asVerified, matches, type AuditSnapshot, type AuditVerified } from "./audit";
-import { asConfig, asMemory, asPermissions, type ConfigSnapshot, type JarvisEvent, type MemorySnapshot, type PermissionsSnapshot } from "./events";
+import { asConfig, asExtensions, asMemory, asPermissions, type ConfigSnapshot, type ExtensionsSnapshot, type JarvisEvent, type MemorySnapshot, type PermissionsSnapshot } from "./events";
 
 export type AgentState = "idle" | "thinking" | "acting" | "awaiting" | "error" | "killed";
 export type Conn = "connecting" | "open" | "closed";
@@ -22,12 +22,13 @@ export interface HudState {
   memory: MemorySnapshot | null;
   permissions: PermissionsSnapshot | null;
   config: ConfigSnapshot | null;
+  extensions: ExtensionsSnapshot | null;
   notice: { level: string; text: string; id: number } | null;
   audit: AuditSnapshot | null;
   auditVerified: AuditVerified | null;
 }
 
-export const initial: HudState = { conn: "connecting", agent: "idle", plan: "", timeline: [], approvals: [], chat: [], memory: null, permissions: null, config: null, notice: null, audit: null, auditVerified: null };
+export const initial: HudState = { conn: "connecting", agent: "idle", plan: "", timeline: [], approvals: [], chat: [], memory: null, permissions: null, config: null, extensions: null, notice: null, audit: null, auditVerified: null };
 
 export type Action =
   | { kind: "conn"; conn: Conn }
@@ -80,6 +81,8 @@ export function reduce(s: HudState, a: Action): HudState {
       return { ...s, permissions: asPermissions(p) ?? s.permissions };
     case "config.changed":
       return { ...s, config: asConfig(p) ?? s.config };
+    case "extensions.changed":
+      return { ...s, extensions: asExtensions(p) ?? s.extensions };
     case "audit.changed":
       return { ...s, audit: asAudit(p) ?? s.audit };
     case "audit.verified":

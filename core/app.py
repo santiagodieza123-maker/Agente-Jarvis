@@ -7,8 +7,10 @@ from pathlib import Path
 from core.audit import AuditLog, clip
 from core.bus import EventBus
 from core.hud_config import ConfigHandlers
+from core.hud_extensions import ExtensionHandlers
 from core.hud_handlers import HudHandlers
 from core.hud_settings import SettingsHandlers
+from core.mcp_client import ExtensionManager
 from core.memory import Memory
 from core.permissions import REPO, PermissionStore
 from core.llm.holder import LLMHolder
@@ -64,7 +66,12 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
     perms = PermissionStore(home / "permissions.json", policy, fs, roots, tools, protected=[REPO, home])
     settings = SettingsHandlers(bus, audit, memory, perms)
     handlers.extra.append(settings)
-    handlers.panic_hooks = [shell.kill_all, web.close]
+    manager = ExtensionManager(home / "extensions.json", tools, audit, lambda: ext_handlers.publish(),
+                               lambda: perms.disabled, roots[0], home / "ext-logs")
+    ext_handlers = ExtensionHandlers(bus, manager, perms, settings.publish_permissions)
+    handlers.extra.append(ext_handlers)
+    handlers.panic_hooks = [shell.kill_all, web.close, manager.stop_all]
+    handlers.extensions = manager
     handlers.memory, handlers.perms, handlers.settings = memory, perms, settings
 
     holder = LLMHolder(None if llm is FROM_CONFIG else llm)

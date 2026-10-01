@@ -46,7 +46,7 @@ class PermissionStore:
         for k, v in (d.get("confirm") or {}).items():
             if k in ActionClass._value2member_map_ and ActionClass(k) not in LOCKED_CLASSES and isinstance(v, bool):
                 self.policy.confirm[ActionClass(k)] = v
-        self.disabled = {t for t in (d.get("disabled") or []) if isinstance(t, str) and t in self.tools}
+        self.disabled = {t for t in (d.get("disabled") or []) if isinstance(t, str) and (t in self.tools or t.startswith("mcp."))}
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)

@@ -10,6 +10,7 @@ dependencies = ["pydantic>=2", "websockets>=13", "langgraph>=1.0"]
 
 [project.optional-dependencies]
 windows = ["mss", "uiautomation", "comtypes", "keyring"]
+mcp = ["mcp>=1.2"]
 web = ["playwright>=1.56"]   # luego: playwright install chromium
 dev = ["pytest"]
 

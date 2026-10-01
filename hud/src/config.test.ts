@@ -45,3 +45,14 @@ describe("asConfig / store", () => {
     expect(reduce(s1, { kind: "event", event: ev({ values: 1 }) }).config).toBe(s1.config);
   });
 });
+
+import { asExtensions } from "./events";
+describe("asExtensions", () => {
+  const e = { name: "x", command: "c", enabled: true, state: "running", error: "", log: "", tools: [{ name: "mcp.x.a", raw: "a", description: "", trusted: false, enabled: true }] };
+  it("valida la forma", () => {
+    expect(asExtensions({ extensions: [e], limits: { extensions: 16, tools: 64 } })).not.toBeNull();
+    expect(asExtensions({ extensions: [{ ...e, tools: [{ name: 1 }] }], limits: {} })).toBeNull();
+    expect(asExtensions({ extensions: [{ ...e, enabled: "si" }], limits: {} })).toBeNull();
+    expect(asExtensions({ extensions: "x" })).toBeNull();
+  });
+});

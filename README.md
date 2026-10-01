@@ -40,6 +40,18 @@ Todo se valida en el núcleo (todo o nada). El atajo de pánico (Ctrl+Shift+F10)
 Límites: con el archivo de secretos (sin keyring) un `shell.exec` aprobado por ti podría leerlo; el consumo se reinicia con cada arranque; no hay
 selector de monitores (el actuador de GUI aún no existe). Raíces de archivos: `JARVIS_ROOTS` o pestaña PERMISOS.
 
+## Extensiones (MCP)
+`pip install -e .[mcp]`. La pestaña MCP da de alta servidores MCP por stdio (p. ej. `npx -y @modelcontextprotocol/server-everything`); sus herramientas
+aparecen como `mcp.<extensión>.<herramienta>`. Un servidor MCP es código externo que se ejecuta con tus permisos, así que:
+solo el HUD puede darlo de alta (con diálogo que muestra el comando exacto; el agente no puede); se lanza sin shell, con entorno mínimo (sin la clave de
+Gemini ni variables KEY/TOKEN/SECRET) y con la primera raíz de trabajo como directorio; sus herramientas piden **confirmación siempre** (clase DESTRUCTIVE)
+hasta que marques una concreta como «lectura»; su salida se trata como **no confiable** (tras leerla, cualquier escritura posterior pide confirmación);
+la descripción que declara el servidor se reduce a su primera línea (≤160 caracteres) y su esquema a una lista blanca; resultados ≤20 000 caracteres y 60 s por llamada.
+Las activadas arrancan con el núcleo; con el pánico o al cerrar el núcleo (SIGTERM/Ctrl+C) o el HUD se terminan sus procesos. Estado y registro de errores en el panel.
+Límites: no hay variables de entorno propias por extensión (servidores que necesiten un token no funcionan aún); una descripción maliciosa podría influir en el
+LLM antes de que exista contaminación (las acciones DESTRUCTIVE/ELEVATED siguen pidiendo confirmación); en Windows `npx.cmd` y el cierre de procesos no están
+probados (el Job Object del watchdog cubre los huérfanos). Variable `JARVIS_CORE_PORT` (por defecto 8765; 0 = aleatorio).
+
 ## Navegador y shell
 `pip install -e .[web] && playwright install chromium`. El navegador usa un perfil propio (`~/.jarvis/browser-profile`, o `JARVIS_BROWSER_PROFILE`),
 visible con `JARVIS_BROWSER_HEADED=1`. Bloquea localhost, redes privadas, metadatos cloud y esquemas no http(s), incluso tras redirecciones.
