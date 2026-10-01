@@ -1,14 +1,17 @@
 # Agente Jarvis
 
 Agente de uso de computadora (CUA) para Windows con HUD estilo Jarvis (Tauri + React/Three.js).
-Plan completo: ver fases 0–7. Estado: Fases 0–1 hechas (sin probar en Windows); Fase 2: bus, servidor WS, orquestador, HUD y herramientas de archivos conectados entre sí; proveedor Gemini (`gemini-3.1-flash-lite`) implementado y probado en vivo.
+Estado: las diez funciones del plan están implementadas (ver «Funciones»). Verificado en Linux, con el modelo real y Chromium, y en runners de Windows
+(CI); lo que no puede comprobarse sin tu máquina se lista en «Límites».
 
 - `watchdog/` kill switch independiente (Job Object + Ctrl+Shift+F10), solo Windows
-- `actuators/` entrada Win32 (`SendInput`), solo Windows
-- `core/` herramientas de shell (siempre con aprobación) y navegador (Playwright, perfil dedicado, anti-SSRF), herramientas de archivos acotadas (`JARVIS_ROOTS`, por defecto `~/Jarvis`), `core/app.py` (ensamblado), políticas, auditoría encadenada, `LLMProvider`, bus de eventos, servidor WS autenticado (`python -m core.main`)
+- `actuators/` entrada Win32 (`SendInput`: clics, texto Unicode, combinaciones), solo Windows
+- `perception/` UI Automation (ventanas, elementos numerados, Set-of-Marks) detrás de una interfaz `GuiBackend`
+- `core/` herramientas de shell (siempre con aprobación), navegador (Playwright, perfil dedicado, anti-SSRF), archivos acotados (`JARVIS_ROOTS`, por defecto `~/Jarvis`),
+  GUI, recetas, extensiones MCP, políticas, auditoría encadenada, `LLMProvider`, bus de eventos, servidor WS autenticado (`python -m core.main`)
+- `broker/` servicio elevado de operaciones cerradas (solo Windows)
 - `schemas/` contrato de eventos HUD↔core
-- `hud/` HUD Tauri + React + Three.js: orbe con estados, consola, línea de tiempo de acciones, aprobaciones y botón de pánico
-- `perception/`, `broker/` pendientes
+- `hud/` HUD Tauri + React + Three.js
 
 Pruebas portables: `pip install -e .[dev] && pytest`. El código Win32 requiere Windows para ejecutarse.
 
@@ -42,9 +45,54 @@ se aborta y queda auditado), color del HUD, mostrar el navegador del agente (al 
 Todo se valida en el núcleo (todo o nada). El atajo de pánico (Ctrl+Shift+F10) lo fija el watchdog y se muestra solo como información.
 Con el archivo de secretos (sin keyring) un `shell.exec` aprobado por ti podría leerlo: la aprobación muestra una advertencia roja si el comando o la ruta
 toca `~/.jarvis`, `.env`, claves SSH/nube o el administrador de credenciales. El consumo (sesión, hoy, total) persiste en `~/.jarvis/usage.json`.
-No hay selector de monitores (el actuador de GUI aún no existe). Raíces de archivos: `JARVIS_ROOTS` o pestaña PERMISOS.
+No hay selector de monitores (la GUI usa el escritorio virtual completo). Raíces de archivos: `JARVIS_ROOTS` o pestaña PERMISOS.
 Restringe la clave en Google AI Studio (solo la API Generative Language) para limitar el daño si algún día se filtra. Ante un 429 de cuota Jarvis espera lo que
 indica el servidor (máx. 45 s por reintento, 3 reintentos) y avisa en la consola; si la cuota está agotada falla con un mensaje claro.
+
+## Funciones
+
+### Control de la GUI (UI Automation)
+`pip install -e .[windows]`. Herramientas `gui.windows`, `gui.observe`, `gui.focus`, `gui.click`, `gui.type`, `gui.press` y `gui.click_xy`. `gui.observe` lista los
+elementos de la ventana con **números estables** (Set-of-Marks): el modelo dice «clic en 12», nunca coordenadas; si el elemento cambió o se movió desde la
+observación, el clic se rechaza y hay que volver a observar. Se usan los patrones de UIA (Invoke, Toggle, SelectionItem, ExpandCollapse, Value) y solo si no hay uno se
+hace un clic con `SendInput`. Con `image=true` la captura anotada se entrega al modelo (visión) una vez, en la siguiente llamada.
+Reglas de seguridad: todo lo que devuelve la GUI es **no confiable** (activa la confirmación de escrituras posteriores); los campos de contraseña nunca se leen ni se
+rellenan; el HUD de Jarvis es invisible e intocable para el agente (la ventana tiene `content_protected` y se filtra por proceso/título, de modo que no puede pulsar
+«Permitir»); `gui.press` solo admite una lista de teclas/combinaciones seguras; `gui.click_xy` es DESTRUCTIVA (siempre confirma). La pestaña VISIÓN muestra la
+captura con las cajas numeradas y la acción en curso.
+
+### Recetas ejecutables
+En MEMORIA, un episodio terminado puede guardarse como receta («Guardar receta»; solo el usuario, no el agente). Los pasos GUI se guardan por nombre/rol/orden, no por
+número. Se pueden parametrizar con `{{parametro}}` (con valor por defecto) y añadir precondiciones (`path_exists`, `window_contains`). Reproducir una receta **no llama al
+LLM**: cada paso pasa por la misma política, confirmaciones, reglas de contenido no confiable y verificación; se detiene en el primer fallo y registra tasa de éxito. Una
+receta no concede permisos. Si se creó tras leer contenido no confiable se marca con aviso.
+
+### Voz
+Pulsar para hablar (Ctrl+Espacio) o escucha continua que solo actúa ante «Jarvis, …». Indicador de micrófono siempre visible; la voz de respuesta usa la síntesis del
+navegador (voz y velocidad configurables) y el nivel del micrófono mueve el orbe. **Privacidad:** el audio de cada frase se envía a Google (Gemini) para transcribirlo;
+el núcleo lo limita a WAV ≤4 MB, 20 peticiones/min, y no guarda ni audita el audio ni el texto (solo bytes y caracteres).
+
+### Panel SISTEMA y apariencia
+SISTEMA: CPU y memoria de Jarvis y sus hijos, retraso del bucle de eventos, GPU (`nvidia-smi` si existe), latencia y errores del modelo, salud de cada componente (núcleo,
+modelo, navegador, UIA, watchdog, extensiones, broker) y procesos hijos; solo se muestrea mientras haya un HUD conectado. Orbe con bloom y partículas, parallax, modo
+compacto (orbe + estado + pánico; las aprobaciones siguen apareciendo) y seis temas (cian, ámbar, verde, magenta, rojo, hielo); sin WebGL se usa un reactor CSS.
+
+### Broker elevado
+El agente corre con integridad Medium. Para operaciones que necesitan administrador existe un proceso aparte (`python -m broker.service`, lanzado desde PERMISOS con
+**Iniciar**, que provoca el aviso UAC de Windows). Habla por un named pipe con ACL solo para tu usuario y SYSTEM (sin acceso remoto; solo la primera instancia del
+pipe es válida), con peticiones firmadas con HMAC, frescas (30 s) y sin repetición. Solo existen operaciones **cerradas**: `winget_install {id}`,
+`service_control {name, start|stop|restart|status}` sobre servicios de una lista permitida que solo se amplía desde el HUD (con doble confirmación), y `ping`/`shutdown`.
+No hay shell ni argumentos libres. Cada operación que cambia algo exige además un cuadro de diálogo del propio servicio elevado (por defecto «No»; UIPI impide que
+un proceso Medium lo pulse), 6 operaciones/min como máximo, y todo se registra. La herramienta del agente es `elevated.*` (clase ELEVATED). `--insecure-auto-approve`
+existe solo para pruebas y no se usa nunca desde el HUD. Fuera de alcance: el escritorio seguro (UAC, Ctrl+Alt+Supr).
+
+## Límites conocidos
+- **Sin comprobar en hardware real:** varios monitores y escalado 125/150 %, integridad Medium real, `winget` y servicios reales con el broker, y la pulsación humana del
+  cuadro de confirmación (CI valida el pipe, la ACL, el protocolo y los indicadores del diálogo, pero no hay persona que lo acepte).
+- La percepción se basa en UI Automation: aplicaciones sin árbol de accesibilidad (juegos, lienzos, algunos Electron) solo se manejan con `gui.click_xy` sobre captura;
+  no hay detección visual de elementos (OmniParser no está integrado).
+- El audio de la voz sale hacia Google; la escucha continua depende de la calidad del micrófono y de la transcripción.
+- Un `shell.exec` aprobado por ti puede hacer lo que tu usuario puede hacer: la barrera es tu confirmación.
 
 ## Extensiones (MCP)
 `pip install -e .[mcp]`. La pestaña MCP da de alta servidores MCP por stdio (p. ej. `npx -y @modelcontextprotocol/server-everything`); sus herramientas
