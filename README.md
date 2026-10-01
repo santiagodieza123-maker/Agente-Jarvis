@@ -45,3 +45,9 @@ Pestañas MEMORIA y PERMISOS. Se guardan en `~/.jarvis` (`JARVIS_HOME`): `memory
 - **Permisos:** confirmación por clase (lectura y escritura reversible configurables; destructiva y elevada **siempre** piden confirmación),
   herramientas activables y carpetas accesibles. Se rechazan carpetas demasiado amplias, del sistema, tu carpeta personal y la del repo/config
   de Jarvis (contienen la clave y los permisos). Ninguna herramienta del agente puede modificar estos ajustes.
+
+## Auditoría (HUD)
+Pestaña AUDITORÍA sobre `~/.jarvis/audit.jsonl` (cadena de hashes SHA-256): registros en vivo, filtro por evento, búsqueda, exportación,
+y **Verificar cadena**, que indica la línea exacta donde se rompe. Consultar y verificar son solo lectura y no escriben en el log.
+Límite conocido: sin clave, quien reescriba todo el archivo recalculando la cadena no se detecta; anota aparte la cabecera (`head`) que muestra el panel.
+Un arranque con una línea parcial/corrupta ya no falla: se conserva y se señala como "(línea corrupta)".

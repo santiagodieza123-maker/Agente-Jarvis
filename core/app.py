@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from core.audit import AuditLog
+from core.audit import AuditLog, clip
 from core.bus import EventBus
 from core.hud_handlers import HudHandlers
 from core.hud_settings import SettingsHandlers
@@ -35,6 +35,7 @@ def jarvis_home() -> Path:
 def wire(llm: LLMProvider | None, bus: EventBus, audit: AuditLog, roots: list[Path],
          exit_fn=os._exit, approval_timeout: float = 120.0, home: Path | None = None) -> HudHandlers:
     home = home or jarvis_home()
+    audit.on_append = lambda rec: bus.publish("audit.appended", clip(rec))     # el HUD ve el log en vivo
     handlers = HudHandlers(bus, audit, exit_fn=exit_fn)
     fs = FsTools(roots)
     shell = ShellTools(roots[0])

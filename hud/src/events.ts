@@ -2,7 +2,7 @@
 export const EVENT_TYPES = [
   "plan.updated", "action.started", "action.finished", "perception.frame",
   "approval.requested", "approval.granted", "approval.denied",
-  "memory.changed", "permissions.changed", "ui.notice", "state.changed", "kill.triggered",
+  "memory.changed", "permissions.changed", "audit.changed", "audit.appended", "audit.verified", "ui.notice", "state.changed", "kill.triggered",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -35,7 +35,9 @@ export type HudMessage =
   | { type: "permissions.set_confirm"; class: string; value: boolean }
   | { type: "permissions.set_tool"; tool: string; enabled: boolean }
   | { type: "permissions.add_root"; path: string }
-  | { type: "permissions.remove_root"; path: string };
+  | { type: "permissions.remove_root"; path: string }
+  | { type: "audit.get"; limit?: number; event?: string; text?: string }
+  | { type: "audit.verify" };
 
 export interface Note { id: number; kind: string; content: string; updated: number }
 export interface Episode { id: number; ts: number; goal: string; status: string; steps: number; answer: string }

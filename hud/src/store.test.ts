@@ -72,3 +72,32 @@ describe("memoria y permisos", () => {
     expect(apply(ev("ui.notice", { text: "x".repeat(1000) })).notice!.text).toHaveLength(300);
   });
 });
+
+describe("auditoría en el store", () => {
+  const snap = (records: unknown[], extra = {}) => ({ records, matched: records.length, total: records.length, event_types: ["a.b"], head: "H0",
+    truncated: false, filters: { event: "", text: "", limit: 3 }, ...extra });
+  const r = (seq: number, event = "a.b", data = {}) => ({ seq, ts: 1, event, data, prev: "p", hash: `h${seq}` });
+  it("ignora registros en vivo hasta que el panel haya cargado", () => {
+    expect(apply(ev("audit.appended", r(1))).audit).toBeNull();
+  });
+  it("antepone registros en vivo, respeta el límite, actualiza total/cabecera y no duplica", () => {
+    let s = apply(ev("audit.changed", snap([r(2), r(1)])));
+    s = [r(3), r(4), r(3)].reduce((acc, x) => reduce(acc, { kind: "event", event: ev("audit.appended", x) }), s);
+    expect(s.audit!.records.map((x) => x.seq)).toEqual([4, 3, 2]);         // límite 3
+    expect(s.audit!.total).toBe(4);
+    expect(s.audit!.head).toBe("h4");
+  });
+  it("un registro que no cumple el filtro cuenta en el total pero no se muestra", () => {
+    const s = apply(ev("audit.changed", snap([r(1)], { filters: { event: "a.b", text: "", limit: 10 } })),
+      ev("audit.appended", r(2, "otro.evento")));
+    expect(s.audit!.records).toHaveLength(1);
+    expect(s.audit!.total).toBe(2);
+    expect(s.audit!.event_types).toContain("otro.evento");                 // el selector se entera del tipo nuevo
+  });
+  it("guarda el resultado de la verificación y descarta formas inválidas", () => {
+    let s = apply(ev("audit.verified", { ok: false, count: 2, bad_line: 3, head: "x" }));
+    expect(s.auditVerified?.bad_line).toBe(3);
+    s = reduce(s, { kind: "event", event: ev("audit.verified", { ok: "no" }) });
+    expect(s.auditVerified?.bad_line).toBe(3);
+  });
+});

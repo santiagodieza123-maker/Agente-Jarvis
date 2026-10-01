@@ -1,3 +1,4 @@
+import { MAX_ROWS, asAudit, asRecord, asVerified, matches, type AuditSnapshot, type AuditVerified } from "./audit";
 import { asMemory, asPermissions, type JarvisEvent, type MemorySnapshot, type PermissionsSnapshot } from "./events";
 
 export type AgentState = "idle" | "thinking" | "acting" | "awaiting" | "error" | "killed";
@@ -21,9 +22,11 @@ export interface HudState {
   memory: MemorySnapshot | null;
   permissions: PermissionsSnapshot | null;
   notice: { level: string; text: string; id: number } | null;
+  audit: AuditSnapshot | null;
+  auditVerified: AuditVerified | null;
 }
 
-export const initial: HudState = { conn: "connecting", agent: "idle", plan: "", timeline: [], approvals: [], chat: [], memory: null, permissions: null, notice: null };
+export const initial: HudState = { conn: "connecting", agent: "idle", plan: "", timeline: [], approvals: [], chat: [], memory: null, permissions: null, notice: null, audit: null, auditVerified: null };
 
 export type Action =
   | { kind: "conn"; conn: Conn }
@@ -74,6 +77,18 @@ export function reduce(s: HudState, a: Action): HudState {
       return { ...s, memory: asMemory(p) ?? s.memory };
     case "permissions.changed":
       return { ...s, permissions: asPermissions(p) ?? s.permissions };
+    case "audit.changed":
+      return { ...s, audit: asAudit(p) ?? s.audit };
+    case "audit.verified":
+      return { ...s, auditVerified: asVerified(p) ?? s.auditVerified };
+    case "audit.appended": {            // registro en vivo: solo si el panel ya cargó y el registro cumple el filtro actual
+      const r = asRecord(p), a = s.audit;
+      if (!r || !a || a.records.some((x) => x.seq === r.seq)) return s;
+      const types = a.event_types.includes(r.event) ? a.event_types : [...a.event_types, r.event].sort();
+      const show = matches(r, a.filters);
+      return { ...s, audit: { ...a, total: a.total + 1, head: r.hash, event_types: types,
+        matched: a.matched + (show ? 1 : 0), records: show ? [r, ...a.records].slice(0, Math.min(a.filters.limit, MAX_ROWS)) : a.records } };
+    }
     case "ui.notice":
       return { ...s, notice: { level: String(p.level ?? "info"), text: String(p.text ?? "").slice(0, 300), id: ++seq } };
     case "kill.triggered":

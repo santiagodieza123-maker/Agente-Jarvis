@@ -1,5 +1,7 @@
-"""Mensajes del HUD para memoria y permisos. Cada cambio responde con una instantánea completa por el bus."""
+"""Mensajes del HUD para memoria, permisos y auditoría. Cada cambio responde con una instantánea completa por el bus."""
 from __future__ import annotations
+
+import asyncio
 
 from core.bus import EventBus
 from core.memory import Memory, MemoryError_
@@ -21,8 +23,10 @@ class SettingsHandlers:
 
     async def __call__(self, msg: dict) -> bool:
         kind = msg.get("type")
-        if not isinstance(kind, str) or not kind.startswith(("memory.", "permissions.")):
+        if not isinstance(kind, str) or not kind.startswith(("memory.", "permissions.", "audit.")):
             return False
+        if kind.startswith("audit."):
+            return await self._audit(kind, msg)
         try:
             if kind == "memory.list":
                 pass
@@ -52,4 +56,20 @@ class SettingsHandlers:
             self._notice("error", str(e))
         finally:
             (self.publish_memory if kind.startswith("memory.") else self.publish_permissions)()
+        return True
+
+    async def _audit(self, kind: str, msg: dict) -> bool:
+        """Solo lectura: consultar y verificar nunca modifican el log (y no se auditan a sí mismas, para no inundarlo)."""
+        if kind == "audit.get":
+            limit, event, text = msg.get("limit", 200), msg.get("event"), msg.get("text")
+            if (isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500
+                    or not (event is None or (isinstance(event, str) and len(event) <= 60))
+                    or not (text is None or (isinstance(text, str) and len(text) <= 100))):
+                self._notice("error", "consulta de auditoría inválida")
+                return True
+            res = await asyncio.to_thread(self.audit.query, limit, event or None, text or None)
+            self.bus.publish("audit.changed", {**res, "filters": {"event": event or "", "text": text or "", "limit": limit}})
+        elif kind == "audit.verify":
+            res = await asyncio.to_thread(self.audit.verify_detail)       # recorre todo el archivo: fuera del event loop
+            self.bus.publish("audit.verified", res)
         return True

@@ -1,6 +1,6 @@
 :root { --c: #2fb8ff; --bg: rgba(4, 14, 28, 0.78); font-family: "Segoe UI", system-ui, sans-serif; color: #cfeeff; }
 html, body, #root { margin: 0; height: 100%; background: transparent; overflow: hidden; }
-.hud { height: 100%; display: grid; grid-template: "h h" auto "o c" 2.4fr "o t" 1fr / 1.2fr 1fr; gap: 12px; padding: 12px; box-sizing: border-box; background: radial-gradient(circle at 30% 50%, #06213a, #020a14 70%); }
+.hud { height: 100%; display: grid; grid-template: "h h" auto "o c" 2.4fr "o t" 1fr / minmax(0, 1.2fr) minmax(0, 1fr); gap: 12px; padding: 12px; box-sizing: border-box; background: radial-gradient(circle at 30% 50%, #06213a, #020a14 70%); }
 .hud.awaiting { --c: #ffb020; } .hud.error { --c: #ff3b3b; } .hud.acting { --c: #00ffd0; } .hud.killed { --c: #773333; }
 header { grid-area: h; display: flex; align-items: center; justify-content: space-between; letter-spacing: .35em; color: var(--c); border-bottom: 1px solid var(--c); padding-bottom: 6px; }
 .status { font-size: .75rem; letter-spacing: .2em; }
@@ -36,3 +36,13 @@ button.deny { background: #3a1010; } button.small { padding: 2px 8px; font-size:
 input[type=checkbox] { width: auto; margin: 0; accent-color: var(--c); }
 select { min-width: 9.5rem; }
 .panel li em { white-space: nowrap; font-size: .7rem; }
+
+.audit > * { flex-shrink: 0; } .vstat { flex: 1; font-size: .78rem; opacity: .75; align-self: center; } .vstat.good { color: #3ddc84; opacity: 1; } .vstat.bad { color: #ff6b6b; opacity: 1; font-weight: 600; }
+.auditlist { overflow: visible; font-size: .76rem; } .auditlist li { display: block; padding: 2px 0; border-bottom: 1px solid color-mix(in srgb, var(--c) 12%, transparent); }
+.auditlist summary { display: flex; gap: 8px; align-items: baseline; cursor: pointer; } .auditlist .seq { opacity: .5; min-width: 2.6rem; } .auditlist .time { opacity: .6; }
+.auditlist .brief { opacity: .8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.auditlist pre { margin: 4px 0; padding: 6px; background: #0007; max-height: 160px; overflow: auto; font-size: .72rem; } .hashes { opacity: .55; font-size: .68rem; }
+.evt { font-size: .66rem; border: 1px solid; border-radius: 3px; padding: 0 5px; white-space: nowrap; }
+.evt.bad { color: #ff6b6b; } .evt.warn { color: #ffb020; } .evt.info { color: #7de7ff; } .evt.good { color: #3ddc84; } .evt.neutral { color: #9bb; }
+.tabs, .panel { min-width: 0; } .auditlist summary { min-width: 0; } .auditlist .time { white-space: nowrap; } .auditlist .brief { flex: 1; }
+.auditlist details { min-width: 0; } .auditlist pre { white-space: pre-wrap; overflow-wrap: anywhere; }

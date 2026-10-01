@@ -256,3 +256,53 @@ def test_settings_work_without_llm_and_garbage_is_ignored(tmp_path):
 
     events, _ = asyncio.run(session(tmp_path, None, hud))        # sin LLM configurado
     assert len(_of(events, "ui.notice")) >= 2
+
+
+def test_audit_get_filters_verify_and_live_append(tmp_path):
+    async def hud(ws, events):
+        await ws.send(json.dumps({"type": "memory.add", "kind": "dato", "content": "algo"}))
+        live = await pump_until(ws, events, lambda e: e["type"] == "audit.appended" and e["payload"]["event"] == "memory.add")
+        assert live["payload"]["seq"] >= 1 and live["payload"]["hash"]            # registro en vivo con su línea
+        await ws.send(json.dumps({"type": "audit.get", "limit": 50}))
+        ch = await pump_until(ws, events, lambda e: e["type"] == "audit.changed")
+        p = ch["payload"]
+        assert p["records"][0]["event"] == "memory.add" and "memory.add" in p["event_types"] and p["head"]
+        await ws.send(json.dumps({"type": "audit.get", "event": "memory.add", "text": "DATO"}))
+        ch = await pump_until(ws, events, lambda e: e["type"] == "audit.changed" and e["payload"]["filters"]["event"] == "memory.add")
+        assert [r["event"] for r in ch["payload"]["records"]] == ["memory.add"]
+        n_before = len(_of(events, "audit.appended"))
+        await ws.send(json.dumps({"type": "audit.verify"}))
+        v = await pump_until(ws, events, lambda e: e["type"] == "audit.verified")
+        assert v["payload"]["ok"] is True and v["payload"]["count"] >= 1
+        await ws.send(json.dumps({"type": "audit.get"}))
+        await pump_until(ws, events, lambda e: e["type"] == "audit.changed" and e["payload"]["filters"]["event"] == "")
+        assert len(_of(events, "audit.appended")) == n_before           # consultar/verificar NO escribe en el log
+
+    asyncio.run(session(tmp_path, None, hud))
+
+
+def test_audit_verify_detects_tampering_over_websocket(tmp_path):
+    async def hud(ws, events):
+        await ws.send(json.dumps({"type": "memory.add", "kind": "dato", "content": "uno"}))
+        await ws.send(json.dumps({"type": "memory.add", "kind": "dato", "content": "dos"}))
+        await pump_until(ws, events, lambda e: e["type"] == "audit.appended" and e["payload"]["seq"] >= 2)
+        p = tmp_path / "a.jsonl"
+        lines = p.read_text().splitlines()
+        rec = json.loads(lines[0]); rec["data"]["kind"] = "manipulado"
+        lines[0] = json.dumps(rec, sort_keys=True); p.write_text("\n".join(lines) + "\n")
+        await ws.send(json.dumps({"type": "audit.verify"}))
+        v = await pump_until(ws, events, lambda e: e["type"] == "audit.verified")
+        assert v["payload"]["ok"] is False and v["payload"]["bad_line"] == 1
+
+    asyncio.run(session(tmp_path, None, hud))
+
+
+@pytest.mark.parametrize("bad", [{"limit": 0}, {"limit": 10_000}, {"limit": "5"}, {"limit": True}, {"event": 5},
+                                 {"event": "x" * 100}, {"text": ["a"]}, {"text": "y" * 500}])
+def test_audit_get_rejects_invalid_params(tmp_path, bad):
+    async def hud(ws, events):
+        await ws.send(json.dumps({"type": "audit.get", **bad}))
+        n = await pump_until(ws, events, lambda e: e["type"] == "ui.notice")
+        assert "inválida" in n["payload"]["text"]
+
+    asyncio.run(session(tmp_path, None, hud))
