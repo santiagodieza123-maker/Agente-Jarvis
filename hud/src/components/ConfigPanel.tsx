@@ -16,7 +16,7 @@ export function ConfigPanel({ config, send }: { config: ConfigSnapshot | null; s
   const [err, setErr] = useState("");
   const sig = config ? JSON.stringify(config.values) : "";
   useEffect(() => { if (config) { setModel(config.values.model); setLimits(draftOf(config)); setErr(""); } }, [sig]);   // eslint-disable-line react-hooks/exhaustive-deps
-  if (!config || !limits) return <section className="panel"><h2>CONFIGURACIÓN</h2><p className="empty">Cargando…</p></section>;
+  if (!config || !limits) return <section className="panel"><h2>TALLER</h2><p className="empty">Despertando…</p></section>;
 
   const k = config.api_key, v = config.values;
   const apply = (e: React.FormEvent) => {
@@ -30,7 +30,7 @@ export function ConfigPanel({ config, send }: { config: ConfigSnapshot | null; s
 
   return (
     <section className="panel cfg" data-testid="config-panel">
-      <h2>CONFIGURACIÓN</h2>
+      <h2>TALLER</h2>
 
       <h3>Modelo</h3>
       <form className="row" onSubmit={(e) => { e.preventDefault(); const m = model.trim(); if (m && m !== v.model) send({ type: "config.set", values: { model: m } }); }}>

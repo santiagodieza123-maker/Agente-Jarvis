@@ -26,7 +26,7 @@ SPEC: dict[str, tuple] = {
     "accent": (str, None, None, False),
 }
 DEFAULTS = {"model": "gemini-3.1-flash-lite", "max_steps": 15, "max_failures": 3, "approval_timeout": 120,
-            "token_budget": 0, "browser_headed": False, "accent": "cian", "confirm_with_extensions": True}
+            "token_budget": 0, "browser_headed": False, "accent": "ámbar", "confirm_with_extensions": True}
 
 
 class SettingsError(ValueError):

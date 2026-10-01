@@ -5,12 +5,12 @@ const COLOR: Record<string, string> = { button: "#ff9f1a", edit: "#35e08a", chec
 
 export function VisionPanel({ frame }: { frame: Frame | null }) {
   const [hover, setHover] = useState<number | null>(null);
-  if (!frame) return <section className="panel vision" data-testid="vision-panel"><h2>VISIÓN DEL AGENTE</h2><p className="empty">Todavía no ha mirado ninguna ventana. Cuando Jarvis use las herramientas gui.*, verás aquí su captura con los elementos numerados.</p></section>;
+  if (!frame) return <section className="panel vision" data-testid="vision-panel"><h2>LO QUE VE JARVIS</h2><p className="empty">Todavía no ha mirado ninguna ventana. Cuando Jarvis use las herramientas gui.*, verás aquí su captura con los elementos numerados.</p></section>;
   const focus = frame.highlight ?? hover;
   const items = frame.elements.filter((e) => e.interactive);
   return (
     <section className="panel vision" data-testid="vision-panel">
-      <h2>VISIÓN DEL AGENTE <span className="count">{frame.title || "—"} · #{frame.seq}</span></h2>
+      <h2>LO QUE VE JARVIS <span className="count">{frame.title || "—"} · #{frame.seq}</span></h2>
       {frame.action && <p className="hint" data-testid="vision-action">▶ {frame.action}</p>}
       <div className="shot">
         <img src={`data:image/jpeg;base64,${frame.image}`} alt={`Captura de ${frame.title}`} width={frame.width} height={frame.height} draggable={false} />

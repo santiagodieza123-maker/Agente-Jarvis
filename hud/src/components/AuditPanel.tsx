@@ -19,10 +19,10 @@ export function AuditPanel({ audit, verified, send }: { audit: AuditSnapshot | n
 
   const exportJson = () => send({ type: "audit.export", ...(audit?.filters.event ? { event: audit.filters.event } : {}), ...(audit?.filters.text ? { text: audit.filters.text } : {}) });
 
-  if (!audit) return <section className="panel"><h2>AUDITORÍA</h2><p className="empty">Cargando…</p></section>;
+  if (!audit) return <section className="panel"><h2>BITÁCORA</h2><p className="empty">Despertando…</p></section>;
   return (
     <section className="panel audit" data-testid="audit-panel">
-      <h2>AUDITORÍA <span className="count">{audit.matched}/{audit.total}</span></h2>
+      <h2>BITÁCORA <span className="count">{audit.matched}/{audit.total}</span></h2>
       <div className="row">
         <Status v={verified} total={audit.total} />
         <button onClick={() => send({ type: "audit.verify" })} data-testid="verify-btn">Verificar cadena</button>

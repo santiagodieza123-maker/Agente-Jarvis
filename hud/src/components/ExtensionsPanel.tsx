@@ -73,7 +73,7 @@ export function ExtensionsPanel({ ext, send }: { ext: ExtensionsSnapshot | null;
   const [command, setCommand] = useState("");
   const [envText, setEnvText] = useState("");
   const [envErr, setEnvErr] = useState("");
-  if (!ext) return <section className="panel"><h2>EXTENSIONES (MCP)</h2><p className="empty">Cargando…</p></section>;
+  if (!ext) return <section className="panel"><h2>INJERTOS (MCP)</h2><p className="empty">Despertando…</p></section>;
   const valid = NAME.test(name) && command.trim().length > 0;
   const add = (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -90,7 +90,7 @@ export function ExtensionsPanel({ ext, send }: { ext: ExtensionsSnapshot | null;
   };
   return (
     <section className="panel exts" data-testid="extensions-panel">
-      <h2>EXTENSIONES (MCP)</h2>
+      <h2>INJERTOS (MCP)</h2>
       <p className="hint">Servidores MCP por stdio. Sus herramientas piden confirmación siempre, salvo las que marques como «lectura», y su salida se trata como no confiable.</p>
       <ul>
         {ext.extensions.map((e) => <Ext key={e.name} e={e} send={send} />)}

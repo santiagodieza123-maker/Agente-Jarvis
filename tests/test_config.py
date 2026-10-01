@@ -22,9 +22,9 @@ def test_defaults_validation_and_persistence(tmp_path):
     p = tmp_path / "s.json"
     s = SettingsStore(p)
     assert s.values["max_steps"] == 15 and s.values["token_budget"] == 0
-    assert s.update({"max_steps": 20, "accent": "ámbar"}) == {"max_steps": 20, "accent": "ámbar"}
+    assert s.update({"max_steps": 20, "accent": "verde"}) == {"max_steps": 20, "accent": "verde"}
     assert s.update({"max_steps": 20}) == {}                       # sin cambios: no escribe
-    assert SettingsStore(p).values["max_steps"] == 20 and SettingsStore(p).values["accent"] == "ámbar"
+    assert SettingsStore(p).values["max_steps"] == 20 and SettingsStore(p).values["accent"] == "verde"
 
 
 @pytest.mark.parametrize("bad", [

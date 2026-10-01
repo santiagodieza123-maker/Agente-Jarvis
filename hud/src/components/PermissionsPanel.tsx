@@ -41,11 +41,11 @@ function Broker({ b, send }: { b: BrokerSnapshot | null; send: (m: HudMessage) =
 
 export function PermissionsPanel({ perms, broker, send }: { perms: PermissionsSnapshot | null; broker: BrokerSnapshot | null; send: (m: HudMessage) => void }) {
   const [root, setRoot] = useState("");
-  if (!perms) return <section className="panel"><h2>PERMISOS</h2><p className="empty">Cargando…</p></section>;
+  if (!perms) return <section className="panel"><h2>LLAVES</h2><p className="empty">Despertando…</p></section>;
 
   return (
     <section className="panel perms" data-testid="permissions-panel">
-      <h2>PERMISOS</h2>
+      <h2>LLAVES</h2>
       <h3>Pedir confirmación antes de…</h3>
       <ul>
         {perms.classes.map((c) => (

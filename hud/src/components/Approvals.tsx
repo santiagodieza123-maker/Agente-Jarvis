@@ -4,7 +4,7 @@ export function Approvals({ items, onDecide }: { items: Approval[]; onDecide: (a
   if (!items.length) return null;
   return (
     <section className="panel approvals" role="alertdialog" aria-label="Aprobación requerida">
-      <h2>APROBACIÓN REQUERIDA</h2>
+      <h2>ALTO: NECESITO TU PERMISO</h2>
       {items.map((a) => (
         <div key={a.id} className="req">
           <code>{a.tool}</code>

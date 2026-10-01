@@ -58,12 +58,12 @@ export function MemoryPanel({ memory, send }: { memory: MemorySnapshot | null; s
   const [kind, setKind] = useState("preferencia");
   const [text, setText] = useState("");
   const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
-  if (!memory) return <section className="panel"><h2>MEMORIA</h2><p className="empty">Cargando…</p></section>;
+  if (!memory) return <section className="panel"><h2>RECUERDOS</h2><p className="empty">Despertando…</p></section>;
   const full = memory.notes.length >= memory.limits.notes;
 
   return (
     <section className="panel mem" data-testid="memory-panel">
-      <h2>MEMORIA <span className="count">{memory.notes.length}/{memory.limits.notes}</span></h2>
+      <h2>RECUERDOS <span className="count">{memory.notes.length}/{memory.limits.notes}</span></h2>
       <p className="hint">Notas que Jarvis recibe como contexto en cada tarea. Solo tú puedes crearlas o cambiarlas.</p>
       <form className="row" onSubmit={(e) => { e.preventDefault(); const t = text.trim(); if (t) { send({ type: "memory.add", kind, content: t }); setText(""); } }}>
         <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Tipo de nota">

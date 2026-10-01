@@ -22,11 +22,11 @@ function Tile({ title, value, sub, values, max, testid }: { title: string; value
 
 export function SystemPanel({ stats }: { stats: Stats[] }) {
   const s = stats[stats.length - 1];
-  if (!s) return <section className="panel sys" data-testid="system-panel"><h2>SISTEMA</h2><p className="empty">Esperando la primera muestra…</p></section>;
+  if (!s) return <section className="panel sys" data-testid="system-panel"><h2>PULSO</h2><p className="empty">Esperando la primera muestra…</p></section>;
   const lat = stats.map((x) => x.llm.last_ms ?? 0);
   return (
     <section className="panel sys" data-testid="system-panel">
-      <h2>SISTEMA <span className="count">en marcha {dur(s.uptime)} · {s.clients} HUD</span></h2>
+      <h2>PULSO <span className="count">en marcha {dur(s.uptime)} · {s.clients} HUD</span></h2>
       <div className="tiles">
         <Tile testid="tile-cpu" title="CPU del núcleo" value={`${s.cpu.process.toFixed(0)} %`} sub={`sistema ${s.cpu.system.toFixed(0)} % · ${s.cpu.cores} núcleos`} values={stats.map((x) => x.cpu.process)} max={100} />
         <Tile testid="tile-mem" title="Memoria del núcleo" value={mb(s.memory.rss)} sub={`sistema ${s.memory.system_percent.toFixed(0)} % · ${s.threads} hilos`} values={stats.map((x) => x.memory.rss)} />

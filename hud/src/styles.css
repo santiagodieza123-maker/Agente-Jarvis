@@ -101,3 +101,18 @@ header .status { flex: 1; text-align: center; } .compactbtn { margin-left: 0; }
 .voicebar { display: grid; gap: 4px; font-size: .78rem; } .voicebar .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; } .voicebar label { display: flex; gap: 5px; align-items: center; } .voicebar input[type=checkbox], .voicebar input[type=range] { width: auto; }
 .voicebar .rec, .micbtn.rec { background: #5a0f0f; color: #fff; border-color: #ff3b3b; animation: recpulse 1.2s infinite; } .recdot { color: #ff5a5a; } .micbtn { padding: 2px 8px; margin-right: 6px; letter-spacing: 0; }
 @keyframes recpulse { 50% { box-shadow: 0 0 10px #ff3b3b; } } .voicebar .hint { margin: 0; opacity: .6; font-size: .7rem; }
+
+.orb { position: relative; }
+.orb-hit { position: absolute; inset: 14% 14% 18%; border-radius: 50%; border: 0; background: transparent; cursor: pointer; padding: 0; }
+.orb-hit:hover { box-shadow: 0 0 60px color-mix(in srgb, var(--c) 35%, transparent); } .orb-hit:focus-visible { outline: 2px dashed var(--c); outline-offset: 4px; }
+.orb-caption { position: absolute; left: 0; right: 0; bottom: 4px; margin: 0; text-align: center; font-size: .72rem; letter-spacing: .18em; color: var(--c); opacity: .75; pointer-events: none; text-transform: uppercase; }
+.compact .orb-caption { display: none; }
+.trail { position: absolute; inset: 6px; z-index: 5; display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 10px; backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--bg0, #0d0802) 82%, transparent); border: 1px solid color-mix(in srgb, var(--c) 60%, transparent); box-shadow: 0 0 40px color-mix(in srgb, var(--c) 25%, transparent); }
+.trail-head { display: flex; justify-content: space-between; align-items: center; } .trail h2 { margin: 0; font-size: .75rem; letter-spacing: .3em; color: var(--c); }
+.trail-head button, .trail .row button { background: transparent; border: 1px solid color-mix(in srgb, var(--c) 60%, transparent); color: var(--c); border-radius: 4px; cursor: pointer; padding: 3px 8px; font-size: .72rem; }
+.trail .row button:hover:not(:disabled) { background: color-mix(in srgb, var(--c) 18%, transparent); } .trail .row button:disabled { opacity: .4; cursor: default; }
+.trail ol { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+.trail li { display: block; padding: 8px 10px; border-left: 2px solid var(--c); background: color-mix(in srgb, var(--c) 7%, transparent); border-radius: 0 6px 6px 0; }
+.trail .ask { margin: 0 0 4px; font-weight: 600; } .trail .ans { margin: 0 0 6px; font-size: .8rem; opacity: .8; max-height: 4.5em; overflow: hidden; } .trail .row { display: flex; gap: 6px; } .trail li.empty { border: 0; background: none; opacity: .6; }
+.compact .trail { inset: 0; font-size: .8rem; }

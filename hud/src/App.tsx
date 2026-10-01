@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { History } from "./components/History";
+import { CONN_LABEL, ORB_HINT, STATE_LABEL, TAB_LABEL } from "./copy";
 import { Approvals } from "./components/Approvals";
 import { AuditPanel } from "./components/AuditPanel";
 import { ConfigPanel } from "./components/ConfigPanel";
@@ -24,6 +26,7 @@ export default function App() {
   const { state, send, submitTask, dispatch } = useJarvis();
   const [tab, setTab] = useState<Tab>("consola");
   const [compact, setCompact] = useState(readCompact);
+  const [trail, setTrail] = useState(false);
   const toggleCompact = async () => {
     const next = !compact;
     setCompact(next); saveCompact(next);
@@ -58,18 +61,23 @@ export default function App() {
     <main className={`hud ${state.agent}${compact ? " compact" : ""}`}>
       <header data-tauri-drag-region>
         <span data-tauri-drag-region>J.A.R.V.I.S.</span>
-        <span className="status" data-tauri-drag-region>{state.conn === "open" || state.agent === "killed" ? state.agent.toUpperCase() : state.conn.toUpperCase()}</span>
-        {voice.supported && <button className={`micbtn${voice.ptt || voice.wake ? " rec" : ""}`} onClick={voice.togglePtt} title="Hablar (Ctrl+Espacio)" aria-label="Hablar" data-testid="mic-header">🎙</button>}
-        <button className="compactbtn" onClick={toggleCompact} title={compact ? "Expandir el HUD" : "Modo compacto: solo el reactor"} aria-label="Modo compacto" data-testid="compact-toggle">{compact ? "⤢" : "⤡"}</button>
-        <button className="panic" onClick={() => send({ type: "panic" })} title="Detiene al agente y a sus procesos hijos">PÁNICO</button>
+        <span className="status" data-tauri-drag-region>{state.conn === "open" || state.agent === "killed" ? STATE_LABEL[state.agent] : CONN_LABEL[state.conn]}</span>
+        {voice.supported && <button className={`micbtn${voice.ptt || voice.wake ? " rec" : ""}`} onClick={voice.togglePtt} title="Háblame (Ctrl+Espacio)" aria-label="Hablar" data-testid="mic-header">🎙</button>}
+        <button className="compactbtn" onClick={toggleCompact} title={compact ? "Abrir todo el HUD" : "Modo compacto: solo la esfera"} aria-label="Modo compacto" data-testid="compact-toggle">{compact ? "⤢" : "⤡"}</button>
+        <button className="panic" onClick={() => send({ type: "panic" })} title="Detiene al agente y a todo lo que lanzó">¡FRENAR!</button>
         <WindowControls needsInput={state.approvals.length > 0} />
       </header>
-      <div className="orb"><Orb state={state.agent} theme={accent} compact={compact} level={voice.level} /></div>
-      {compact && <p className="compact-status" data-testid="compact-status">{state.plan || (state.conn === "open" ? "Listo" : "Sin conexión")}</p>}
+      <div className="orb">
+        <Orb state={state.agent} theme={accent} compact={compact} level={voice.level} />
+        <button className="orb-hit" onClick={() => setTrail((v) => !v)} aria-pressed={trail} aria-label="Abrir la estela de tareas" title={ORB_HINT[state.agent]} data-testid="orb-toggle" />
+        <p className="orb-caption" aria-hidden="true">{ORB_HINT[state.agent]}</p>
+        {trail && <History chat={state.chat} timeline={state.timeline} disabled={state.conn !== "open"} onRepeat={submitTask} onClose={() => setTrail(false)} />}
+      </div>
+      {compact && <p className="compact-status" data-testid="compact-status">{state.plan || (state.conn === "open" ? "Aquí estoy" : "Sin señal")}</p>}
       <div className="tabs">
         <nav role="tablist">
           {TABS.map((t) => (
-            <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t.toUpperCase()}</button>
+            <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{TAB_LABEL[t] ?? t.toUpperCase()}</button>
           ))}
         </nav>
         {state.notice && <div className={`notice ${state.notice.level}`} role="status" data-testid="notice">{state.notice.text}</div>}
