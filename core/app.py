@@ -18,6 +18,7 @@ from core.llm.provider import LLMProvider
 from core.orchestrator import Orchestrator
 from core.policy import Policy
 from core.sensitive import sensitive_hits
+from core.usage import UsageStore
 from core.settings import DEFAULTS, SecretStore, SettingsStore
 from core.tools_fs import FsTools
 from core.tools_shell import ShellTools
@@ -75,7 +76,7 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
     handlers.extensions = manager
     handlers.memory, handlers.perms, handlers.settings = memory, perms, settings
 
-    holder = LLMHolder(None if llm is FROM_CONFIG else llm)
+    holder = LLMHolder(None if llm is FROM_CONFIG else llm, UsageStore(home / "usage.json"))
     timeout = {"v": float(cfg.values["approval_timeout"])}
 
     async def approver(approval_id, action, args) -> bool:

@@ -72,13 +72,14 @@ export interface ConfigValues {
   model: string; max_steps: number; max_failures: number; approval_timeout: number;
   token_budget: number; browser_headed: boolean; accent: string; confirm_with_extensions?: boolean;
 }
+export interface Bucket { calls: number; input: number; output: number }
 export interface ConfigSnapshot {
   values: ConfigValues;
   spec: Record<string, { min: number | null; max: number | null; restart: boolean }>;
   accents: string[];
   restart: string[];
   api_key: { configured: boolean; source: string; hint: string; backend: string };
-  usage: { calls: number; input: number; output: number };
+  usage: { calls: number; input: number; output: number; today?: Bucket; total?: Bucket };
   llm_ready: boolean;
   fixed: { kill_hotkey: string };
 }

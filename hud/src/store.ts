@@ -1,4 +1,4 @@
-import { MAX_ROWS, asAudit, asRecord, asVerified, matches, type AuditSnapshot, type AuditVerified } from "./audit";
+import { MAX_ROWS, asAudit, mergeRecent, asRecord, asVerified, matches, type AuditRecord, type AuditSnapshot, type AuditVerified } from "./audit";
 import { asConfig, asExtensions, asMemory, asPermissions, type ConfigSnapshot, type ExtensionsSnapshot, type JarvisEvent, type MemorySnapshot, type PermissionsSnapshot } from "./events";
 
 export type AgentState = "idle" | "thinking" | "acting" | "awaiting" | "error" | "killed";
@@ -26,9 +26,10 @@ export interface HudState {
   notice: { level: string; text: string; id: number } | null;
   audit: AuditSnapshot | null;
   auditVerified: AuditVerified | null;
+  recent: AuditRecord[];          // últimos registros recibidos en vivo: cubren la carrera con una consulta en curso
 }
 
-export const initial: HudState = { conn: "connecting", agent: "idle", plan: "", timeline: [], approvals: [], chat: [], memory: null, permissions: null, config: null, extensions: null, notice: null, audit: null, auditVerified: null };
+export const initial: HudState = { conn: "connecting", agent: "idle", plan: "", timeline: [], approvals: [], chat: [], memory: null, permissions: null, config: null, extensions: null, notice: null, audit: null, auditVerified: null, recent: [] };
 
 export type Action =
   | { kind: "conn"; conn: Conn }
@@ -83,16 +84,20 @@ export function reduce(s: HudState, a: Action): HudState {
       return { ...s, config: asConfig(p) ?? s.config };
     case "extensions.changed":
       return { ...s, extensions: asExtensions(p) ?? s.extensions };
-    case "audit.changed":
-      return { ...s, audit: asAudit(p) ?? s.audit };
+    case "audit.changed": {
+      const snap = asAudit(p);
+      return { ...s, audit: snap ? mergeRecent(snap, s.recent) : s.audit };
+    }
     case "audit.verified":
       return { ...s, auditVerified: asVerified(p) ?? s.auditVerified };
     case "audit.appended": {            // registro en vivo: solo si el panel ya cargó y el registro cumple el filtro actual
       const r = asRecord(p), a = s.audit;
-      if (!r || !a || a.records.some((x) => x.seq === r.seq)) return s;
+      if (!r) return s;
+      const recent = [...s.recent.filter((x) => x.seq !== r.seq), r].slice(-50);
+      if (!a || a.records.some((x) => x.seq === r.seq)) return { ...s, recent };
       const types = a.event_types.includes(r.event) ? a.event_types : [...a.event_types, r.event].sort();
       const show = matches(r, a.filters);
-      return { ...s, audit: { ...a, total: a.total + 1, head: r.hash, event_types: types,
+      return { ...s, recent, audit: { ...a, total: a.total + 1, head: r.hash, event_types: types,
         matched: a.matched + (show ? 1 : 0), records: show ? [r, ...a.records].slice(0, Math.min(a.filters.limit, MAX_ROWS)) : a.records } };
     }
     case "ui.notice":

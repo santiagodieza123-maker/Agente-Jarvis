@@ -83,8 +83,14 @@ export function ConfigPanel({ config, send }: { config: ConfigSnapshot | null; s
         Confirmar las escrituras mientras haya extensiones externas activas <em>(recomendado)</em>
       </label>
 
-      <h3>Consumo de la sesión</h3>
-      <p className="hint" data-testid="usage">{config.usage.calls} llamadas · {config.usage.input.toLocaleString()} tokens de entrada · {config.usage.output.toLocaleString()} de salida</p>
+      <h3>Consumo</h3>
+      <table className="usage" data-testid="usage">
+        <thead><tr><th></th><th>llamadas</th><th>entrada</th><th>salida</th></tr></thead>
+        <tbody>
+          {([["Esta sesión", config.usage], ["Hoy", config.usage.today], ["Total", config.usage.total]] as const).map(([label, b]) =>
+            b ? <tr key={label}><td>{label}</td><td>{b.calls.toLocaleString()}</td><td>{b.input.toLocaleString()}</td><td>{b.output.toLocaleString()}</td></tr> : null)}
+        </tbody>
+      </table>
 
       <h3>Atajos</h3>
       <p className="hint">Detener todo: <kbd>{config.fixed.kill_hotkey}</kbd> — lo fija el watchdog (proceso aparte); no se puede cambiar desde aquí.</p>

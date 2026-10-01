@@ -46,3 +46,15 @@ export function brief(r: AuditRecord): string {
 }
 
 export const MAX_ROWS = 500;
+
+/** Una consulta puede responder con una instantánea anterior a registros que ya llegaron en vivo: se fusionan los que falten. */
+export function mergeRecent(snap: AuditSnapshot, recent: AuditRecord[]): AuditSnapshot {
+  const top = Math.max(0, ...snap.records.map((r) => r.seq), snap.total);          // `total` ≈ nº de líneas en ese momento
+  const have = new Set(snap.records.map((r) => r.seq));
+  const missing = recent.filter((r) => r.seq > top && !have.has(r.seq)).sort((a, b) => a.seq - b.seq);
+  if (!missing.length) return snap;
+  const types = [...new Set([...snap.event_types, ...missing.map((r) => r.event)])].sort();
+  const shown = missing.filter((r) => matches(r, snap.filters));
+  return { ...snap, total: snap.total + missing.length, head: missing[missing.length - 1].hash, event_types: types,
+    matched: snap.matched + shown.length, records: [...shown.reverse(), ...snap.records].slice(0, Math.min(snap.filters.limit, MAX_ROWS)) };
+}

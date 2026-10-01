@@ -261,7 +261,8 @@ def test_token_budget_aborts_and_usage_is_reported(tmp_path, monkeypatch):
     assert [l["data"]["reason"] for l in lines if l["event"] == "task.aborted"] == ["max_tokens"]
     assert [l["data"]["tokens"] for l in lines if l["event"] == "task.finished"] == [200]   # 2 llamadas de 100
     snap = last(q, "config.changed")
-    assert snap["usage"] == {"calls": 2, "input": 120, "output": 80}
+    assert {k: snap["usage"][k] for k in ("calls", "input", "output")} == {"calls": 2, "input": 120, "output": 80}
+    assert snap["usage"]["today"]["input"] == 120 and snap["usage"]["total"]["calls"] == 2
 
 
 def test_test_llm_reports_success_and_failure_without_leaking(tmp_path, monkeypatch):

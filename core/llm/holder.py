@@ -9,8 +9,9 @@ class NoLLM(RuntimeError):
 
 
 class LLMHolder(LLMProvider):
-    def __init__(self, inner: LLMProvider | None = None):
+    def __init__(self, inner: LLMProvider | None = None, store=None):
         self.inner = inner
+        self.store = store                                          # UsageStore opcional: consumo persistente
         self.calls = self.input_tokens = self.output_tokens = 0     # consumo de la sesión
 
     def generate(self, system, messages, tools, image_png=None) -> LLMResponse:
@@ -21,7 +22,10 @@ class LLMHolder(LLMProvider):
         self.calls += 1
         self.input_tokens += r.input_tokens
         self.output_tokens += r.output_tokens
+        if self.store is not None:
+            self.store.add(r.input_tokens, r.output_tokens)
         return r
 
     def usage(self) -> dict:
-        return {"calls": self.calls, "input": self.input_tokens, "output": self.output_tokens}
+        u = {"calls": self.calls, "input": self.input_tokens, "output": self.output_tokens}        # de la sesión
+        return {**u, **self.store.snapshot()} if self.store is not None else u

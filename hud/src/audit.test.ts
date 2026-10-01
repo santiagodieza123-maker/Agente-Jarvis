@@ -51,3 +51,23 @@ describe("asVerified con HMAC", () => {
 describe("severity de manipulación", () => {
   it("marca como grave la detección de manipulación", () => { expect(severity("audit.tamper_detected")).toBe("bad"); });
 });
+
+import { mergeRecent } from "./audit";
+describe("mergeRecent (carrera consulta/registro en vivo)", () => {
+  const snap = (records: AuditRecord[], total: number) => ({ records, matched: records.length, total, head: "h", event_types: records.map((r) => r.event), truncated: false, filters: { event: "", text: "", limit: 200 } });
+  it("añade los registros en vivo posteriores a la instantánea", () => {
+    const s = snap([rec("a", {}, 3), rec("a", {}, 2)], 3);
+    const m = mergeRecent(s, [rec("b", {}, 3), rec("b", {}, 4), rec("c", {}, 5)]);
+    expect(m.records.map((r) => r.seq)).toEqual([5, 4, 3, 2]);
+    expect(m.total).toBe(5); expect(m.matched).toBe(4); expect(m.event_types).toEqual(["a", "b", "c"]);
+  });
+  it("respeta el filtro y no duplica", () => {
+    const s = { ...snap([rec("a", {}, 3)], 3), filters: { event: "a", text: "", limit: 200 } };
+    const m = mergeRecent(s, [rec("x", {}, 4), rec("a", {}, 5), rec("a", {}, 3)]);
+    expect(m.records.map((r) => r.seq)).toEqual([5, 3]); expect(m.total).toBe(5); expect(m.matched).toBe(2);
+  });
+  it("sin novedades devuelve la misma instantánea", () => {
+    const s = snap([rec("a", {}, 3)], 3);
+    expect(mergeRecent(s, [rec("a", {}, 3)])).toBe(s);
+  });
+});
