@@ -27,9 +27,18 @@ inyectado, y al cerrarlo no quedan procesos. **No** verificado: Windows (WebView
 lanzador). Límite: el token es visible, vía entorno del proceso, para procesos del mismo usuario (igual que lo sería por stdout).
 Sin `GEMINI_API_KEY` el núcleo registra las tareas pero no las ejecuta.
 
-## Configuración de Gemini
-Crea un `.env` en la raíz (ya está en `.gitignore`; no lo subas): `GEMINI_API_KEY=...`.
-Modelo por defecto `gemini-3.1-flash-lite`; cámbialo con `JARVIS_GEMINI_MODEL`. Raíces de archivos: `JARVIS_ROOTS`.
+## Configuración de Gemini y pestaña CONFIG
+La clave puede ponerse en un `.env` en la raíz (ya está en `.gitignore`; no lo subas): `GEMINI_API_KEY=...`, o desde la pestaña CONFIG del HUD.
+Prioridad: la clave guardada desde el HUD, y si no hay, la del entorno. La clave guardada va al Credential Manager de Windows si `keyring`
+está instalado (`pip install -e .[windows]`) y, si no, a `~/.jarvis/secrets.json` (modo 0600). El HUD nunca recibe la clave, solo si existe y sus
+4 últimos caracteres; tampoco se escribe en el log de auditoría (se audita el cambio, no el valor).
+
+CONFIG permite, con efecto inmediato y persistente en `~/.jarvis/settings.json`: modelo (por defecto `gemini-3.1-flash-lite`, o `JARVIS_GEMINI_MODEL`),
+pasos máximos (1–50), fallos acumulados (1–10), espera de aprobación (10–600 s), presupuesto de tokens por tarea (0 = sin límite; al agotarse la tarea
+se aborta y queda auditado), color del HUD, mostrar el navegador del agente (al reiniciar), probar la conexión y ver el consumo de la sesión.
+Todo se valida en el núcleo (todo o nada). El atajo de pánico (Ctrl+Shift+F10) lo fija el watchdog y se muestra solo como información.
+Límites: con el archivo de secretos (sin keyring) un `shell.exec` aprobado por ti podría leerlo; el consumo se reinicia con cada arranque; no hay
+selector de monitores (el actuador de GUI aún no existe). Raíces de archivos: `JARVIS_ROOTS` o pestaña PERMISOS.
 
 ## Navegador y shell
 `pip install -e .[web] && playwright install chromium`. El navegador usa un perfil propio (`~/.jarvis/browser-profile`, o `JARVIS_BROWSER_PROFILE`),

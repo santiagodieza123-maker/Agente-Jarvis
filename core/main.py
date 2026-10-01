@@ -5,7 +5,7 @@ import sys
 from core.audit import AuditLog
 from core.env import load_dotenv
 from core.bus import EventBus
-from core.app import jarvis_home, load_llm, wire, workspace_roots
+from core.app import FROM_CONFIG, jarvis_home, wire, workspace_roots
 from core.server import HudServer
 
 
@@ -13,7 +13,7 @@ async def run() -> None:
     load_dotenv()
     bus = EventBus()
     audit = AuditLog(jarvis_home() / "audit.jsonl")
-    handlers = wire(load_llm(), bus, audit, workspace_roots())
+    handlers = wire(FROM_CONFIG, bus, audit, workspace_roots())
     server = HudServer(bus, port=8765, on_message=handlers)
     port = await server.start()
     audit.append("core.started", port=port)

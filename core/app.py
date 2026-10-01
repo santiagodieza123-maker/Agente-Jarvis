@@ -6,13 +6,16 @@ from pathlib import Path
 
 from core.audit import AuditLog, clip
 from core.bus import EventBus
+from core.hud_config import ConfigHandlers
 from core.hud_handlers import HudHandlers
 from core.hud_settings import SettingsHandlers
 from core.memory import Memory
 from core.permissions import REPO, PermissionStore
+from core.llm.holder import LLMHolder
 from core.llm.provider import LLMProvider
 from core.orchestrator import Orchestrator
 from core.policy import Policy
+from core.settings import DEFAULTS, SecretStore, SettingsStore
 from core.tools_fs import FsTools
 from core.tools_shell import ShellTools
 from core.tools_web import WebTools
@@ -32,15 +35,29 @@ def jarvis_home() -> Path:
     return Path(os.environ.get("JARVIS_HOME", str(Path.home() / ".jarvis")))
 
 
-def wire(llm: LLMProvider | None, bus: EventBus, audit: AuditLog, roots: list[Path],
+FROM_CONFIG = object()      # wire(FROM_CONFIG, ...): el proveedor sale de los ajustes del HUD y de la clave guardada o del entorno
+
+
+def build_llm(model: str, key: str | None) -> LLMProvider | None:
+    if not key:
+        return None
+    from core.llm.gemini import GeminiProvider
+    return GeminiProvider(key, model)
+
+
+def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
          exit_fn=os._exit, approval_timeout: float = 120.0, home: Path | None = None) -> HudHandlers:
     home = home or jarvis_home()
     audit.on_append = lambda rec: bus.publish("audit.appended", clip(rec))     # el HUD ve el log en vivo
     handlers = HudHandlers(bus, audit, exit_fn=exit_fn)
+    cfg = SettingsStore(home / "settings.json", {
+        "approval_timeout": approval_timeout,
+        "model": os.environ.get("JARVIS_GEMINI_MODEL", DEFAULTS["model"]),
+        "browser_headed": os.environ.get("JARVIS_BROWSER_HEADED") == "1"})
     fs = FsTools(roots)
     shell = ShellTools(roots[0])
     web = WebTools(os.environ.get("JARVIS_BROWSER_PROFILE", str(home / "browser-profile")),
-                   headless=os.environ.get("JARVIS_BROWSER_HEADED") != "1")   # perfil dedicado, nunca el del usuario
+                   headless=not cfg.values["browser_headed"])   # perfil dedicado, nunca el del usuario
     tools = {t.name: t for t in (*fs.tools(), *shell.tools(), *web.tools())}
     policy = Policy(allowed_roots=[str(r.resolve()) for r in roots])
     memory = Memory(home / "memory.db")
@@ -49,28 +66,41 @@ def wire(llm: LLMProvider | None, bus: EventBus, audit: AuditLog, roots: list[Pa
     handlers.extra.append(settings)
     handlers.panic_hooks = [shell.kill_all, web.close]
     handlers.memory, handlers.perms, handlers.settings = memory, perms, settings
-    if llm is None:
-        return handlers
+
+    holder = LLMHolder(None if llm is FROM_CONFIG else llm)
+    timeout = {"v": float(cfg.values["approval_timeout"])}
 
     async def approver(approval_id, action, args) -> bool:
-        return await handlers.request(approval_id, approval_timeout)
+        return await handlers.request(approval_id, timeout["v"])
 
-    orch = Orchestrator(llm, tools, policy, audit, bus, approver,
+    orch = Orchestrator(holder, tools, policy, audit, bus, approver,
                         is_enabled=lambda n: n not in perms.disabled, memory_block=memory.prompt_block)
 
+    def apply(rebuild: bool) -> None:
+        """Aplica en caliente los ajustes; rebuild=True recrea el proveedor (cambio de modelo o de clave)."""
+        orch.max_steps, orch.max_failures = cfg.values["max_steps"], cfg.values["max_failures"]
+        orch.token_budget, timeout["v"] = cfg.values["token_budget"], float(cfg.values["approval_timeout"])
+        if rebuild:
+            holder.inner = build_llm(cfg.values["model"], config.key())
+
+    config = ConfigHandlers(bus, audit, cfg, SecretStore(home / "secrets.json"), holder, apply)
+    handlers.extra.append(config)
+    handlers.config = config
+    orch.max_steps, orch.max_failures, orch.token_budget = cfg.values["max_steps"], cfg.values["max_failures"], cfg.values["token_budget"]
+    if llm is FROM_CONFIG:
+        holder.inner = build_llm(cfg.values["model"], config.key())
+
     async def run_task(goal: str) -> None:
-        final = await orch.run(goal)
+        if holder.inner is None:
+            bus.publish("plan.updated", {"text": "Sin clave de API: configúrala en la pestaña CONFIG."})
+            bus.publish("state.changed", {"state": "idle"})
+            return
+        try:
+            final = await orch.run(goal)
+        finally:
+            config.publish()                      # refresca el consumo de tokens
         memory.record_episode(goal, final["status"], final["steps"], final["answer"])
         settings.publish_memory()
 
     handlers.run_task = run_task
     return handlers
-
-
-def load_llm() -> LLMProvider | None:
-    """Gemini si hay GEMINI_API_KEY (env o .env); modelo sobreescribible con JARVIS_GEMINI_MODEL."""
-    key = os.environ.get("GEMINI_API_KEY")
-    if not key:
-        return None
-    from core.llm.gemini import DEFAULT_MODEL, GeminiProvider
-    return GeminiProvider(key, os.environ.get("JARVIS_GEMINI_MODEL", DEFAULT_MODEL))

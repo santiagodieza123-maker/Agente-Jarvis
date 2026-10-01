@@ -1,19 +1,25 @@
 import { useEffect, useState } from "react";
 import { Approvals } from "./components/Approvals";
 import { AuditPanel } from "./components/AuditPanel";
+import { ConfigPanel } from "./components/ConfigPanel";
 import { Console } from "./components/Console";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { Orb } from "./components/Orb";
 import { PermissionsPanel } from "./components/PermissionsPanel";
 import { Timeline } from "./components/Timeline";
 import { WindowControls } from "./components/WindowControls";
+import { ACCENT_COLOR } from "./config";
 import { useJarvis } from "./useJarvis";
 
-type Tab = "consola" | "memoria" | "permisos" | "auditoría";
+type Tab = "consola" | "memoria" | "permisos" | "auditoría" | "config";
+const TABS: Tab[] = ["consola", "memoria", "permisos", "auditoría", "config"];
 
 export default function App() {
   const { state, send, submitTask, dispatch } = useJarvis();
   const [tab, setTab] = useState<Tab>("consola");
+
+  const accent = state.config?.values.accent;
+  useEffect(() => { document.documentElement.style.setProperty("--c", ACCENT_COLOR[accent ?? "cian"] ?? ACCENT_COLOR.cian); }, [accent]);
 
   useEffect(() => {   // los avisos se descartan solos
     if (!state.notice) return;
@@ -32,7 +38,7 @@ export default function App() {
       <div className="orb"><Orb state={state.agent} /></div>
       <div className="tabs">
         <nav role="tablist">
-          {(["consola", "memoria", "permisos", "auditoría"] as Tab[]).map((t) => (
+          {TABS.map((t) => (
             <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t.toUpperCase()}</button>
           ))}
         </nav>
@@ -40,6 +46,7 @@ export default function App() {
         {tab === "consola" && <Console chat={state.chat} disabled={state.conn !== "open"} onSubmit={submitTask} />}
         {tab === "memoria" && <MemoryPanel memory={state.memory} send={send} />}
         {tab === "permisos" && <PermissionsPanel perms={state.permissions} send={send} />}
+        {tab === "config" && <ConfigPanel config={state.config} send={send} />}
         {tab === "auditoría" && <AuditPanel audit={state.audit} verified={state.auditVerified} send={send} />}
       </div>
       <Timeline items={state.timeline} />

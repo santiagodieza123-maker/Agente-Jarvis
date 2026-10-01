@@ -52,6 +52,7 @@ class State(TypedDict):
     pending: ToolCall | None
     tainted: bool
     steps: int
+    tokens: int
     failures: int
     answer: str
     status: str   # running | done | aborted
@@ -68,6 +69,7 @@ class Orchestrator:
     approver: Approver
     max_steps: int = 15
     max_failures: int = 3
+    token_budget: int = 0        # tokens (entrada+salida) por tarea; 0 = sin límite
     is_enabled: Callable[[str], bool] = lambda name: True      # herramientas deshabilitadas desde el HUD
     memory_block: Callable[[], str] = lambda: ""                # notas del usuario para el prompt
     _graph: Any = field(init=False, repr=False, default=None)
@@ -87,9 +89,9 @@ class Orchestrator:
         self.audit.append("task.started", goal=goal)
         self.bus.publish("state.changed", {"state": "thinking"})
         init: State = {"goal": goal, "messages": [{"role": "user", "content": goal}], "pending": None,
-                       "tainted": False, "steps": 0, "failures": 0, "answer": "", "status": "running"}
+                       "tainted": False, "steps": 0, "tokens": 0, "failures": 0, "answer": "", "status": "running"}
         final = await self._graph.ainvoke(init, {"recursion_limit": 4 * self.max_steps + 10})
-        self.audit.append("task.finished", status=final["status"], steps=final["steps"])
+        self.audit.append("task.finished", status=final["status"], steps=final["steps"], tokens=final["tokens"])
         self.bus.publish("state.changed", {"state": "idle"})
         return final
 
@@ -97,13 +99,17 @@ class Orchestrator:
         if s["steps"] >= self.max_steps:
             self.audit.append("task.aborted", reason="max_steps")
             return {"status": "aborted", "answer": "Límite de pasos alcanzado."}
+        if self.token_budget and s["tokens"] >= self.token_budget:
+            self.audit.append("task.aborted", reason="max_tokens", tokens=s["tokens"])
+            return {"status": "aborted", "answer": f"Presupuesto de tokens agotado ({s['tokens']}/{self.token_budget})."}
         schemas = [t.schema() for t in self.tools.values() if self.is_enabled(t.name)]
         r = await asyncio.to_thread(self.llm.generate, SYSTEM + self.memory_block(), s["messages"], schemas)
+        tokens = s["tokens"] + r.input_tokens + r.output_tokens
         self.bus.publish("plan.updated", {"text": r.text, "next": r.tool_calls[0].name if r.tool_calls else None})
         if not r.tool_calls:
-            return {"status": "done", "answer": r.text}
+            return {"status": "done", "answer": r.text, "tokens": tokens}
         call = r.tool_calls[0]
-        return {"pending": call,
+        return {"pending": call, "tokens": tokens,
                 "messages": s["messages"] + [{"role": "assistant", "content": f"[llamada a herramienta] {call.name}({call.args})"}]}
 
     def _record(self, s: State, content: str, untrusted: bool = False) -> list[dict]:

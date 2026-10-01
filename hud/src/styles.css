@@ -50,3 +50,14 @@ select { min-width: 9.5rem; }
 .winctl { display: flex; gap: 4px; margin-left: 10px; letter-spacing: 0; }
 .winctl button { width: 26px; padding: 0; line-height: 22px; }
 .winctl button.on { background: var(--c); color: #001018; }
+
+.cfg { overflow-y: auto; } .cfg > * { flex-shrink: 0; }
+.cfg .row { display: flex; gap: 6px; align-items: center; margin: 4px 0; } .cfg .row input { flex: 1; min-width: 0; }
+.cfg .hint { margin: 4px 0; font-size: .8rem; opacity: .85; } .cfg code, .cfg kbd { color: var(--c); }
+.limits { display: grid; gap: 6px; } .limits label { display: grid; grid-template-columns: minmax(0, 1fr) 90px; gap: 8px; align-items: center; font-size: .8rem; }
+.limits input { text-align: right; } .limits button { justify-self: start; }
+.swatches button { display: flex; gap: 6px; align-items: center; background: transparent; padding: 4px 10px; font-size: .75rem; } .swatches button.on { background: color-mix(in srgb, var(--c) 22%, transparent); }
+.swatches i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.cfg .check { display: flex; gap: 8px; align-items: center; font-size: .8rem; margin-top: 6px; } .cfg .check input { width: auto; }
+nav button { min-width: 0; padding-inline: 2px; letter-spacing: .08em; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+@media (max-width: 1000px) { nav button { font-size: .6rem; letter-spacing: .02em; } }

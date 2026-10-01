@@ -2,7 +2,7 @@
 export const EVENT_TYPES = [
   "plan.updated", "action.started", "action.finished", "perception.frame",
   "approval.requested", "approval.granted", "approval.denied",
-  "memory.changed", "permissions.changed", "audit.changed", "audit.appended", "audit.verified", "ui.notice", "state.changed", "kill.triggered",
+  "memory.changed", "permissions.changed", "config.changed", "audit.changed", "audit.appended", "audit.verified", "ui.notice", "state.changed", "kill.triggered",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -36,6 +36,11 @@ export type HudMessage =
   | { type: "permissions.set_tool"; tool: string; enabled: boolean }
   | { type: "permissions.add_root"; path: string }
   | { type: "permissions.remove_root"; path: string }
+  | { type: "config.get" }
+  | { type: "config.set"; values: Record<string, string | number | boolean> }
+  | { type: "config.set_api_key"; key: string }
+  | { type: "config.clear_api_key" }
+  | { type: "config.test_llm" }
   | { type: "audit.get"; limit?: number; event?: string; text?: string }
   | { type: "audit.verify" };
 
@@ -52,4 +57,29 @@ export function asMemory(p: Record<string, unknown>): MemorySnapshot | null {
 }
 export function asPermissions(p: Record<string, unknown>): PermissionsSnapshot | null {
   return isArr(p.classes) && isArr(p.tools) && isArr(p.roots) ? (p as unknown as PermissionsSnapshot) : null;
+}
+
+export interface ConfigValues {
+  model: string; max_steps: number; max_failures: number; approval_timeout: number;
+  token_budget: number; browser_headed: boolean; accent: string;
+}
+export interface ConfigSnapshot {
+  values: ConfigValues;
+  spec: Record<string, { min: number | null; max: number | null; restart: boolean }>;
+  accents: string[];
+  restart: string[];
+  api_key: { configured: boolean; source: string; hint: string; backend: string };
+  usage: { calls: number; input: number; output: number };
+  llm_ready: boolean;
+  fixed: { kill_hotkey: string };
+}
+export function asConfig(p: Record<string, unknown>): ConfigSnapshot | null {
+  const v = p.values as Record<string, unknown> | undefined, k = p.api_key as Record<string, unknown> | undefined;
+  const u = p.usage as Record<string, unknown> | undefined, f = p.fixed as Record<string, unknown> | undefined;
+  const ok = !!v && typeof v === "object" && typeof v.model === "string" && typeof v.accent === "string" && typeof v.browser_headed === "boolean"
+    && ["max_steps", "max_failures", "approval_timeout", "token_budget"].every((n) => typeof v[n] === "number")
+    && !!k && typeof k === "object" && typeof k.configured === "boolean" && typeof k.hint === "string" && typeof k.source === "string"
+    && !!u && typeof u === "object" && ["calls", "input", "output"].every((n) => typeof u[n] === "number")
+    && !!f && typeof f.kill_hotkey === "string" && !!p.spec && typeof p.spec === "object" && isArr(p.accents) && isArr(p.restart) && typeof p.llm_ready === "boolean";
+  return ok ? (p as unknown as ConfigSnapshot) : null;
 }

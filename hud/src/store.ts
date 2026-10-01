@@ -1,5 +1,5 @@
 import { MAX_ROWS, asAudit, asRecord, asVerified, matches, type AuditSnapshot, type AuditVerified } from "./audit";
-import { asMemory, asPermissions, type JarvisEvent, type MemorySnapshot, type PermissionsSnapshot } from "./events";
+import { asConfig, asMemory, asPermissions, type ConfigSnapshot, type JarvisEvent, type MemorySnapshot, type PermissionsSnapshot } from "./events";
 
 export type AgentState = "idle" | "thinking" | "acting" | "awaiting" | "error" | "killed";
 export type Conn = "connecting" | "open" | "closed";
@@ -21,12 +21,13 @@ export interface HudState {
   chat: { who: "user" | "jarvis"; text: string }[];
   memory: MemorySnapshot | null;
   permissions: PermissionsSnapshot | null;
+  config: ConfigSnapshot | null;
   notice: { level: string; text: string; id: number } | null;
   audit: AuditSnapshot | null;
   auditVerified: AuditVerified | null;
 }
 
-export const initial: HudState = { conn: "connecting", agent: "idle", plan: "", timeline: [], approvals: [], chat: [], memory: null, permissions: null, notice: null, audit: null, auditVerified: null };
+export const initial: HudState = { conn: "connecting", agent: "idle", plan: "", timeline: [], approvals: [], chat: [], memory: null, permissions: null, config: null, notice: null, audit: null, auditVerified: null };
 
 export type Action =
   | { kind: "conn"; conn: Conn }
@@ -77,6 +78,8 @@ export function reduce(s: HudState, a: Action): HudState {
       return { ...s, memory: asMemory(p) ?? s.memory };
     case "permissions.changed":
       return { ...s, permissions: asPermissions(p) ?? s.permissions };
+    case "config.changed":
+      return { ...s, config: asConfig(p) ?? s.config };
     case "audit.changed":
       return { ...s, audit: asAudit(p) ?? s.audit };
     case "audit.verified":
