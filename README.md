@@ -13,10 +13,19 @@ Plan completo: ver fases 0–7. Estado: Fases 0–1 hechas (sin probar en Window
 Pruebas portables: `pip install -e .[dev] && pytest`. El código Win32 requiere Windows para ejecutarse.
 
 ## HUD
-Desarrollo: arranca `python -m core.main` (imprime `port` y `token`) y `cd hud && npm install && npm run dev`;
-abre `http://localhost:1420/?port=<port>&token=<token>`. Pruebas: `cd hud && npm test`.
-Verificado: el shell de Tauri compila (`cargo check`, en Linux; no se ha ejecutado ni empaquetado en Windows). Pendiente:
-el lanzador que pasa puerto y token al HUD; Sin `GEMINI_API_KEY` el núcleo registra las tareas pero no las ejecuta.
+Arranque con un solo comando: `python tools/launch.py`. Lanza el núcleo (bajo el watchdog en Windows), espera `JARVIS_READY`
+y abre el HUD de Tauri pasándole puerto y token por variables de entorno del proceso hijo (nunca por argv ni a logs; la clave de
+Gemini se retira de ese entorno). Al cerrar el HUD el lanzador detiene el núcleo (en Windows, el Job Object del watchdog mata
+además a todos sus hijos). Opciones: `--hud RUTA` o `JARVIS_HUD_BIN`, `--no-watchdog`, `--browser`.
+
+Compilar el HUD: `cd hud && npm install && npm run tauri build` (el lanzador detecta `hud/src-tauri/target/release/jarvis-hud[.exe]`).
+Desarrollo en navegador: `cd hud && npm run dev` y `python tools/launch.py --browser` (imprime y abre la URL con puerto y token).
+La ventana no tiene bordes: la cabecera arrastra y trae minimizar, click-through y cerrar. Pruebas: `cd hud && npm test` y `cd hud/src-tauri && cargo test`.
+
+Verificado en Linux: el binario de Tauri (release, bajo Xvfb) abre una conexión WebSocket establecida con el núcleo real usando el token
+inyectado, y al cerrarlo no quedan procesos. **No** verificado: Windows (WebView2, arrastre/cierre/click-through reales, watchdog bajo el
+lanzador). Límite: el token es visible, vía entorno del proceso, para procesos del mismo usuario (igual que lo sería por stdout).
+Sin `GEMINI_API_KEY` el núcleo registra las tareas pero no las ejecuta.
 
 ## Configuración de Gemini
 Crea un `.env` en la raíz (ya está en `.gitignore`; no lo subas): `GEMINI_API_KEY=...`.

@@ -46,3 +46,7 @@ select { min-width: 9.5rem; }
 .evt.bad { color: #ff6b6b; } .evt.warn { color: #ffb020; } .evt.info { color: #7de7ff; } .evt.good { color: #3ddc84; } .evt.neutral { color: #9bb; }
 .tabs, .panel { min-width: 0; } .auditlist summary { min-width: 0; } .auditlist .time { white-space: nowrap; } .auditlist .brief { flex: 1; }
 .auditlist details { min-width: 0; } .auditlist pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.winctl { display: flex; gap: 4px; margin-left: 10px; letter-spacing: 0; }
+.winctl button { width: 26px; padding: 0; line-height: 22px; }
+.winctl button.on { background: var(--c); color: #001018; }

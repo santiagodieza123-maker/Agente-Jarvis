@@ -6,6 +6,7 @@ import { MemoryPanel } from "./components/MemoryPanel";
 import { Orb } from "./components/Orb";
 import { PermissionsPanel } from "./components/PermissionsPanel";
 import { Timeline } from "./components/Timeline";
+import { WindowControls } from "./components/WindowControls";
 import { useJarvis } from "./useJarvis";
 
 type Tab = "consola" | "memoria" | "permisos" | "auditoría";
@@ -22,10 +23,11 @@ export default function App() {
 
   return (
     <main className={`hud ${state.agent}`}>
-      <header>
-        <span>J.A.R.V.I.S.</span>
-        <span className="status">{state.conn === "open" || state.agent === "killed" ? state.agent.toUpperCase() : state.conn.toUpperCase()}</span>
+      <header data-tauri-drag-region>
+        <span data-tauri-drag-region>J.A.R.V.I.S.</span>
+        <span className="status" data-tauri-drag-region>{state.conn === "open" || state.agent === "killed" ? state.agent.toUpperCase() : state.conn.toUpperCase()}</span>
         <button className="panic" onClick={() => send({ type: "panic" })} title="Detiene al agente y a sus procesos hijos">PÁNICO</button>
+        <WindowControls />
       </header>
       <div className="orb"><Orb state={state.agent} /></div>
       <div className="tabs">

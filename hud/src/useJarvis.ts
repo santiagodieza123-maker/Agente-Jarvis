@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { parseEvent, type HudMessage } from "./events";
+import { endpoint } from "./connection";
 import { initial, reduce } from "./store";
-
-// Conexión: ?port=8765&token=... (en Tauri la inyecta el lanzador; en desarrollo se pasa a mano).
-function endpoint(): string | null {
-  const q = new URLSearchParams(location.search);
-  const port = q.get("port"), token = q.get("token");
-  return port && token ? `ws://127.0.0.1:${Number(port)}/?token=${encodeURIComponent(token)}` : null;
-}
 
 export function useJarvis() {
   const [state, dispatch] = useReducer(reduce, initial);

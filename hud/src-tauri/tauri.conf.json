@@ -10,20 +10,13 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [
-      {
-        "title": "Jarvis",
-        "width": 1100,
-        "height": 700,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "resizable": true
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": "default-src 'self'; connect-src ws://127.0.0.1:*; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
     }
   },
-  "bundle": { "active": true, "targets": "all" }
+  "bundle": {
+    "active": true,
+    "targets": "all"
+  }
 }
