@@ -1,11 +1,11 @@
 # Agente Jarvis
 
 Agente de uso de computadora (CUA) para Windows con HUD estilo Jarvis (Tauri + React/Three.js).
-Plan completo: ver fases 0–7. Estado: Fases 0–1 (cimientos y seguridad base) en curso.
+Plan completo: ver fases 0–7. Estado: Fases 0–1 hechas (sin probar en Windows); Fase 2 en curso (bus + servidor WS listos, falta orquestador y HUD).
 
 - `watchdog/` kill switch independiente (Job Object + Ctrl+Shift+F10), solo Windows
 - `actuators/` entrada Win32 (`SendInput`), solo Windows
-- `core/` políticas, auditoría encadenada, interfaz `LLMProvider`
+- `core/` políticas, auditoría encadenada, `LLMProvider`, bus de eventos, servidor WS autenticado (`python -m core.main`)
 - `schemas/` contrato de eventos HUD↔core
 - `perception/`, `broker/`, `hud/` pendientes
 
