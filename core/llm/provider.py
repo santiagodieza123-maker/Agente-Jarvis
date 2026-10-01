@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 class ToolCall:
     name: str
     args: dict
+    signature: str | None = None      # firma de pensamiento del proveedor (Gemini 3): debe devolverse tal cual en el historial
 
 
 @dataclass

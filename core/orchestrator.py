@@ -116,12 +116,13 @@ class Orchestrator:
             return {"status": "done", "answer": r.text, "tokens": tokens}
         call = r.tool_calls[0]
         return {"pending": call, "tokens": tokens,
-                "messages": s["messages"] + [{"role": "assistant", "content": f"[llamada a herramienta] {call.name}({call.args})"}]}
+                "messages": s["messages"] + [{"role": "assistant", "content": "", "call": {"name": call.name, "args": call.args, "signature": call.signature}}]}
 
-    def _record(self, s: State, content: str, untrusted: bool = False) -> list[dict]:
+    def _record(self, s: State, content: str, untrusted: bool = False, name: str | None = None) -> list[dict]:
+        """`name`: herramienta a la que responde este resultado (el historial lo envía como functionResponse)."""
         if untrusted:
             content = f"<observed untrusted>{content}</observed>"
-        return s["messages"] + [{"role": "tool", "content": content}]
+        return s["messages"] + [{"role": "tool", "content": content, **({"name": name} if name else {})}]
 
     async def _act(self, s: State) -> dict:
         call = s["pending"]
@@ -130,11 +131,11 @@ class Orchestrator:
         if tool is not None and not self.is_enabled(tool.name):
             self.audit.append("action.rejected", tool=call.name, reason="disabled")
             return {"steps": steps, "pending": None, "failures": s["failures"] + 1,
-                    "messages": self._record(s, f"herramienta deshabilitada por el usuario: {call.name}")}
+                    "messages": self._record(s, f"herramienta deshabilitada por el usuario: {call.name}", name=call.name)}
         if tool is None:
             self.audit.append("action.rejected", tool=call.name, reason="unknown_tool")
             return {"steps": steps, "pending": None, "failures": s["failures"] + 1,
-                    "messages": self._record(s, f"herramienta desconocida: {call.name}")}
+                    "messages": self._record(s, f"herramienta desconocida: {call.name}", name=call.name)}
         wd = self.workdir()
         if tool.path_arg and wd:                       # ruta relativa del modelo -> dentro de la carpeta de trabajo
             rel = call.args.get(tool.path_arg)
@@ -161,7 +162,7 @@ class Orchestrator:
         if decision is Decision.DENY:
             self.audit.append("action.denied", tool=tool.name)
             return {"steps": steps, "pending": None, "failures": s["failures"] + 1,
-                    "messages": self._record(s, f"acción denegada por política: {tool.name}")}
+                    "messages": self._record(s, f"acción denegada por política: {tool.name}", name=call.name)}
 
         self.bus.publish("action.started", {"tool": tool.name, "args": call.args})
         try:
@@ -174,7 +175,7 @@ class Orchestrator:
         return {"steps": steps, "pending": None,
                 "tainted": s["tainted"] or (tool.untrusted_output and ok),
                 "failures": s["failures"] + (0 if ok else 1),
-                "messages": self._record(s, str(out) if ok else f"error: {err}", tool.untrusted_output and ok),
+                "messages": self._record(s, str(out) if ok else f"error: {err}", tool.untrusted_output and ok, name=call.name),
                 "_last": (tool, out, ok)}  # consumido por verify
 
     async def _verify(self, s: State) -> dict:

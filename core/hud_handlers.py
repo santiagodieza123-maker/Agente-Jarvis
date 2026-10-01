@@ -50,7 +50,7 @@ class HudHandlers:
             await self.run_task(goal)
         except Exception as e:  # un fallo del planificador no debe tumbar el núcleo
             self.audit.append("task.crashed", error=f"{type(e).__name__}: {e}")
-            self.bus.publish("plan.updated", {"text": f"La tarea falló: {type(e).__name__}"})
+            self.bus.publish("plan.updated", {"text": f"La tarea falló: {type(e).__name__}: {str(e)[:200]}"})
             self.bus.publish("state.changed", {"state": "idle"})
 
     async def cleanup(self) -> None:

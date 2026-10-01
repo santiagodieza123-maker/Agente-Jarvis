@@ -1,6 +1,7 @@
 """Ensamblado del núcleo: LLM + herramientas + política + auditoría + bus + HUD."""
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 
@@ -108,6 +109,9 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
             bus.publish("plan.updated", {"text": "Sin clave de API: configúrala en la pestaña CONFIG."})
             bus.publish("state.changed", {"state": "idle"})
             return
+        loop = asyncio.get_running_loop()
+        holder.on_wait = lambda secs, why: loop.call_soon_threadsafe(     # se llama desde el hilo del LLM
+            bus.publish, "plan.updated", {"text": f"Esperando por {why} ({int(secs)} s)…"})
         try:
             final = await orch.run(goal)
         finally:
