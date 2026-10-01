@@ -30,6 +30,9 @@ jobs:
         env:
           JARVIS_NET_TESTS: "1"
         run: python -m pytest -q -p no:cacheprovider
+      - name: UI Automation contra una aplicación WinForms real (salida detallada)
+        if: runner.os == 'Windows'
+        run: python -m pytest tests/test_uia_windows.py -v -s -p no:cacheprovider
       - name: HUD (tipos, pruebas, build)
         working-directory: hud
         run: |
