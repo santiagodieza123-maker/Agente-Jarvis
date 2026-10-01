@@ -50,6 +50,7 @@ export type HudMessage =
   | { type: "extensions.set_trust"; name: string; tool: string; read: boolean }
   | { type: "extensions.set_tool"; name: string; tool: string; enabled: boolean }
   | { type: "audit.get"; limit?: number; event?: string; text?: string }
+  | { type: "audit.export"; event?: string; text?: string }
   | { type: "audit.verify" };
 
 export interface Note { id: number; kind: string; content: string; updated: number }

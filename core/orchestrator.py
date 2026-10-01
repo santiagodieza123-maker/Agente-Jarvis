@@ -73,6 +73,7 @@ class Orchestrator:
     token_budget: int = 0        # tokens (entrada+salida) por tarea; 0 = sin límite
     is_enabled: Callable[[str], bool] = lambda name: True      # herramientas deshabilitadas desde el HUD
     memory_block: Callable[[], str] = lambda: ""                # notas del usuario para el prompt
+    sensitive: Callable[[str, dict], list] = lambda tool, args: []   # avisos de acciones que tocan secretos
     workdir: Callable[[], Any] = lambda: None                    # carpeta de trabajo (primera raíz permitida)
     external_context: Callable[[], bool] = lambda: False        # hay herramientas de extensiones externas en el contexto del LLM
     _graph: Any = field(init=False, repr=False, default=None)
@@ -150,7 +151,8 @@ class Orchestrator:
         if decision is Decision.CONFIRM:
             aid = uuid.uuid4().hex[:12]
             self.bus.publish("approval.requested", {"id": aid, "tool": tool.name, "args": call.args, "origin": origin.value,
-                                                       "why": "content" if s["tainted"] else ("extensions" if ext_ctx else "")})
+                                                       "why": "content" if s["tainted"] else ("extensions" if ext_ctx else ""),
+                                                       "warnings": self.sensitive(tool.name, call.args)})
             granted = await self.approver(aid, action, call.args)
             self.audit.append("approval.resolved", id=aid, tool=tool.name, granted=granted)
             self.bus.publish("approval.granted" if granted else "approval.denied", {"id": aid, "tool": tool.name})

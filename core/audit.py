@@ -174,6 +174,37 @@ class AuditLog:
     def verify(self) -> bool:
         return self.verify_detail()["ok"]
 
+    def export(self, dest: str | Path, event: str | None = None, text: str | None = None) -> int:
+        """Escribe en `dest` (JSONL, registros completos, en orden cronológico) los que cumplan el filtro. Devuelve cuántos."""
+        needle = text.lower() if text else None
+        n = 0
+        dest = Path(dest)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=dest.parent, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as out:
+                if self.path.exists():
+                    with self.path.open(encoding="utf-8", errors="replace") as f:
+                        for line in f:
+                            rec = self._parse(line) if line.strip() else None
+                            if rec is None:
+                                continue
+                            if event and rec["event"] != event:
+                                continue
+                            if needle and needle not in json.dumps(rec["data"], ensure_ascii=False).lower() and needle not in rec["event"].lower():
+                                continue
+                            out.write(json.dumps(rec, sort_keys=True, ensure_ascii=False) + "\n")
+                            n += 1
+            os.chmod(tmp, 0o600)
+            os.replace(tmp, dest)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+        return n
+
     def query(self, limit: int = 200, event: str | None = None, text: str | None = None) -> dict:
         """Registros más recientes primero. `seq` es el número de línea. Lee solo el final del archivo."""
         records: list[dict] = []

@@ -9,8 +9,9 @@ from core.permissions import PermissionError_, PermissionStore
 
 
 class SettingsHandlers:
-    def __init__(self, bus: EventBus, audit, memory: Memory, perms: PermissionStore):
+    def __init__(self, bus: EventBus, audit, memory: Memory, perms: PermissionStore, export_dir=None):
         self.bus, self.audit, self.memory, self.perms = bus, audit, memory, perms
+        self.export_dir = export_dir
 
     def publish_memory(self) -> None:
         self.bus.publish("memory.changed", self.memory.snapshot())
@@ -69,6 +70,17 @@ class SettingsHandlers:
                 return True
             res = await asyncio.to_thread(self.audit.query, limit, event or None, text or None)
             self.bus.publish("audit.changed", {**res, "filters": {"event": event or "", "text": text or "", "limit": limit}})
+        elif kind == "audit.export":
+            event, text = msg.get("event"), msg.get("text")
+            if (self.export_dir is None or not (event is None or (isinstance(event, str) and len(event) <= 60))
+                    or not (text is None or (isinstance(text, str) and len(text) <= 100))):
+                self._notice("error", "exportación de auditoría inválida")
+                return True
+            from datetime import datetime
+            from pathlib import Path
+            dest = Path(self.export_dir) / f"auditoria-{datetime.now():%Y%m%d-%H%M%S}.jsonl"
+            n = await asyncio.to_thread(self.audit.export, dest, event or None, text or None)
+            self._notice("info", f"{n} registros exportados a {dest}")
         elif kind == "audit.verify":
             res = await asyncio.to_thread(self.audit.verify_detail)       # recorre todo el archivo: fuera del event loop
             self.bus.publish("audit.verified", res)

@@ -17,13 +17,7 @@ export function AuditPanel({ audit, verified, send }: { audit: AuditSnapshot | n
   const query = (e = event, t = text) => send({ type: "audit.get", limit: 200, event: e, text: t });
   useEffect(() => { query(); /* carga inicial al abrir la pestaña */ }, []);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  const exportJson = () => {
-    if (!audit) return;
-    const blob = new Blob([JSON.stringify(audit.records, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob); a.download = `jarvis-auditoria-${Date.now()}.json`; a.click();
-    URL.revokeObjectURL(a.href);
-  };
+  const exportJson = () => send({ type: "audit.export", ...(audit?.filters.event ? { event: audit.filters.event } : {}), ...(audit?.filters.text ? { text: audit.filters.text } : {}) });
 
   if (!audit) return <section className="panel"><h2>AUDITORÍA</h2><p className="empty">Cargando…</p></section>;
   return (
@@ -45,7 +39,7 @@ export function AuditPanel({ audit, verified, send }: { audit: AuditSnapshot | n
         <input value={text} maxLength={100} onChange={(e) => setText(e.target.value)} placeholder="Buscar en los datos…" aria-label="Buscar" />
         <button>Buscar</button>
         <button type="button" onClick={() => query()} title="Recargar">↻</button>
-        <button type="button" onClick={exportJson} disabled={!audit.records.length} title="Descarga los registros mostrados (los muy grandes van recortados)">Exportar</button>
+        <button type="button" onClick={exportJson} disabled={!audit.records.length} title="Guarda en ~/.jarvis/exports/ todos los registros que cumplan el filtro actual (completos, en JSONL)">Exportar</button>
       </form>
       <ul className="auditlist">
         {audit.records.map((r) => (

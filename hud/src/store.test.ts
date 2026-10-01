@@ -101,3 +101,12 @@ describe("auditoría en el store", () => {
     expect(s.auditVerified?.bad_line).toBe(3);
   });
 });
+
+describe("avisos de aprobación", () => {
+  it("conserva los avisos sensibles y descarta formas inválidas", () => {
+    const s = apply(ev("approval.requested", { id: "a", tool: "shell.exec", args: {}, origin: "user", warnings: ["secretos"] }),
+                    ev("approval.requested", { id: "b", tool: "x", args: {}, origin: "user", warnings: "no-es-lista" }));
+    expect(s.approvals[0].warnings).toEqual(["secretos"]);
+    expect(s.approvals[1].warnings).toEqual([]);
+  });
+});

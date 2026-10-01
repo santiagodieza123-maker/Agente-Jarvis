@@ -312,3 +312,15 @@ def test_named_secret_with_keyring_and_garbage_file(tmp_path):
     assert SecretStore(tmp_path / "bad.json", keyring_mod=None).get() is None
     (tmp_path / "bad2.json").write_text('{"audit_hmac_key": "corta"}')
     assert len(SecretStore(tmp_path / "bad2.json", keyring_mod=None).get_or_create_bytes("audit_hmac_key")) == 32   # valor inválido: se regenera
+
+
+def test_audit_export_over_handlers_and_validation(tmp_path, monkeypatch):
+    h, bus, audit, q = build(tmp_path, Fake(), monkeypatch)
+    audit.append("fs.write", path="x")
+    asyncio.run(h({"type": "audit.export", "event": "fs.write"}))
+    notices = [e["payload"] for e in drain(q) if e["type"] == "ui.notice"]
+    assert "1 registros exportados" in notices[-1]["text"]
+    files = list((tmp_path / "home" / "exports").glob("auditoria-*.jsonl"))
+    assert len(files) == 1 and json.loads(files[0].read_text().splitlines()[0])["event"] == "fs.write"
+    asyncio.run(h({"type": "audit.export", "event": "x" * 100}))
+    assert drain(q)[-1]["payload"]["level"] == "error"

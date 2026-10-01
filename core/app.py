@@ -17,6 +17,7 @@ from core.llm.holder import LLMHolder
 from core.llm.provider import LLMProvider
 from core.orchestrator import Orchestrator
 from core.policy import Policy
+from core.sensitive import sensitive_hits
 from core.settings import DEFAULTS, SecretStore, SettingsStore
 from core.tools_fs import FsTools
 from core.tools_shell import ShellTools
@@ -64,7 +65,7 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
     policy = Policy(allowed_roots=[str(r.resolve()) for r in roots])
     memory = Memory(home / "memory.db")
     perms = PermissionStore(home / "permissions.json", policy, fs, roots, tools, protected=[REPO, home])
-    settings = SettingsHandlers(bus, audit, memory, perms)
+    settings = SettingsHandlers(bus, audit, memory, perms, export_dir=home / "exports")
     handlers.extra.append(settings)
     manager = ExtensionManager(home / "extensions.json", tools, audit, lambda: ext_handlers.publish(),
                                lambda: perms.disabled, roots[0], home / "ext-logs", secrets=SecretStore(home / "secrets.json"))
@@ -83,6 +84,7 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
     orch = Orchestrator(holder, tools, policy, audit, bus, approver,
                         is_enabled=lambda n: n not in perms.disabled, memory_block=memory.prompt_block,
                         workdir=lambda: perms.roots[0] if perms.roots else None,
+                        sensitive=lambda tool, args: sensitive_hits(tool, args, [home, REPO / ".env"]),
                         external_context=lambda: cfg.values["confirm_with_extensions"] and any(
                             n.startswith("mcp.") and n not in perms.disabled for n in tools))
 

@@ -247,3 +247,21 @@ def test_empty_keyed_log_and_missing_anchor_are_fine(tmp_path):
     keyed(tmp_path)
     (tmp_path / "a.anchor").unlink()
     assert AuditLog(tmp_path / "a.jsonl", key=K1, anchor=tmp_path / "a.anchor").verify()      # límite documentado: sin ancla no hay detección de truncado
+
+
+# ---------- exportación ----------
+def test_export_writes_full_filtered_records_0600(tmp_path):
+    log = AuditLog(tmp_path / "a.jsonl", key=K1)
+    log.append("fs.write", path="a.txt", content="x" * 5000)
+    log.append("approval.resolved", granted=True)
+    log.append("fs.write", path="b.txt", content="y")
+    n = log.export(tmp_path / "out" / "e.jsonl", event="fs.write")
+    recs = [_j.loads(l) for l in (tmp_path / "out" / "e.jsonl").read_text().splitlines()]
+    assert n == 2 and [r["data"]["path"] for r in recs] == ["a.txt", "b.txt"] and len(recs[0]["data"]["content"]) == 5000   # completo, sin recortar
+    assert all("mac" in r for r in recs)
+    import os as _os
+    if _os.name != "nt":
+        assert (_os.stat(tmp_path / "out" / "e.jsonl").st_mode & 0o777) == 0o600
+    assert log.export(tmp_path / "out" / "t.jsonl", text="b.txt") == 1
+    assert log.export(tmp_path / "out" / "n.jsonl", event="nada") == 0 and (tmp_path / "out" / "n.jsonl").read_text() == ""
+    assert not list((tmp_path / "out").glob("*.tmp"))

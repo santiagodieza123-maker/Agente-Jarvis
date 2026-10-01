@@ -72,3 +72,4 @@ nav button { min-width: 0; padding-inline: 2px; letter-spacing: .08em; white-spa
 .extlog { max-height: 130px; overflow: auto; font-size: .7rem; background: rgba(0,0,0,.35); padding: 6px; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .addext { display: grid; gap: 6px; }
 .envbox { font-size: .78rem; } .envbox summary { cursor: pointer; opacity: .85; } .envbox code { margin-right: 8px; } .envbox textarea, .addext textarea { width: 100%; box-sizing: border-box; background: transparent; color: inherit; border: 1px solid var(--c); border-radius: 4px; padding: 6px; font-family: monospace; resize: vertical; }
+.danger { color: #ff6b6b; border: 1px solid #ff3b3b; background: rgba(255, 59, 59, .12); padding: 6px 8px; border-radius: 4px; margin: 6px 0; font-size: .8rem; }
