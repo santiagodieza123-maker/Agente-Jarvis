@@ -10,7 +10,7 @@ import tempfile
 from contextlib import suppress
 from pathlib import Path
 
-ACCENTS = ("cian", "ámbar", "verde", "magenta")
+ACCENTS = ("cian", "ámbar", "verde", "magenta", "rojo", "hielo")
 _MODEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")      # va dentro de la URL de la API: sin '/', '?' ni '#'
 _KEY = re.compile(r"^[A-Za-z0-9._-]{16,256}$")
 

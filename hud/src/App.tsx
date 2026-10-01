@@ -10,8 +10,9 @@ import { PermissionsPanel } from "./components/PermissionsPanel";
 import { VisionPanel } from "./components/VisionPanel";
 import { SystemPanel } from "./components/SystemPanel";
 import { Timeline } from "./components/Timeline";
-import { WindowControls } from "./components/WindowControls";
-import { ACCENT_COLOR } from "./config";
+import { WindowControls, inTauri } from "./components/WindowControls";
+import { SIZES, readCompact, saveCompact } from "./compact";
+import { applyTheme } from "./themes";
 import { useJarvis } from "./useJarvis";
 
 type Tab = "consola" | "memoria" | "permisos" | "auditoría" | "mcp" | "visión" | "sistema" | "config";
@@ -20,9 +21,21 @@ const TABS: Tab[] = ["consola", "memoria", "permisos", "auditoría", "mcp", "vis
 export default function App() {
   const { state, send, submitTask, dispatch } = useJarvis();
   const [tab, setTab] = useState<Tab>("consola");
+  const [compact, setCompact] = useState(readCompact);
+  const toggleCompact = async () => {
+    const next = !compact;
+    setCompact(next); saveCompact(next);
+    if (inTauri()) {                                               // la ventana de Tauri cambia de tamaño con el modo
+      try {
+        const [{ getCurrentWindow }, { LogicalSize }] = await Promise.all([import("@tauri-apps/api/window"), import("@tauri-apps/api/dpi")]);
+        const [w, h] = next ? SIZES.compact : SIZES.full;
+        await getCurrentWindow().setSize(new LogicalSize(w, h));
+      } catch { /* sin permiso o sin ventana: solo cambia el diseño */ }
+    }
+  };
 
   const accent = state.config?.values.accent;
-  useEffect(() => { document.documentElement.style.setProperty("--c", ACCENT_COLOR[accent ?? "cian"] ?? ACCENT_COLOR.cian); }, [accent]);
+  useEffect(() => { applyTheme(accent); }, [accent]);
 
   useEffect(() => {   // los avisos se descartan solos
     if (!state.notice) return;
@@ -31,14 +44,16 @@ export default function App() {
   }, [state.notice, dispatch]);
 
   return (
-    <main className={`hud ${state.agent}`}>
+    <main className={`hud ${state.agent}${compact ? " compact" : ""}`}>
       <header data-tauri-drag-region>
         <span data-tauri-drag-region>J.A.R.V.I.S.</span>
         <span className="status" data-tauri-drag-region>{state.conn === "open" || state.agent === "killed" ? state.agent.toUpperCase() : state.conn.toUpperCase()}</span>
+        <button className="compactbtn" onClick={toggleCompact} title={compact ? "Expandir el HUD" : "Modo compacto: solo el reactor"} aria-label="Modo compacto" data-testid="compact-toggle">{compact ? "⤢" : "⤡"}</button>
         <button className="panic" onClick={() => send({ type: "panic" })} title="Detiene al agente y a sus procesos hijos">PÁNICO</button>
         <WindowControls needsInput={state.approvals.length > 0} />
       </header>
-      <div className="orb"><Orb state={state.agent} /></div>
+      <div className="orb"><Orb state={state.agent} theme={accent} compact={compact} /></div>
+      {compact && <p className="compact-status" data-testid="compact-status">{state.plan || (state.conn === "open" ? "Listo" : "Sin conexión")}</p>}
       <div className="tabs">
         <nav role="tablist">
           {TABS.map((t) => (

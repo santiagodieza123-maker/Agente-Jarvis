@@ -1,6 +1,6 @@
 import type { ConfigSnapshot } from "./events";
 
-export const ACCENT_COLOR: Record<string, string> = { cian: "#2fb8ff", ámbar: "#ffc247", verde: "#35e08a", magenta: "#ff4fd8" };
+export { ACCENT_COLOR } from "./themes";
 export const LIMIT_FIELDS = ["max_steps", "max_failures", "approval_timeout", "token_budget"] as const;
 export type LimitField = (typeof LIMIT_FIELDS)[number];
 

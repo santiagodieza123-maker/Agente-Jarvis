@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { THEMES } from "../themes";
 import { ACCENT_COLOR, LIMIT_FIELDS, changed, parseLimits, type LimitField } from "../config";
 import type { ConfigSnapshot, HudMessage } from "../events";
 
@@ -63,12 +64,12 @@ export function ConfigPanel({ config, send }: { config: ConfigSnapshot | null; s
         <button>Aplicar límites</button>
       </form>
 
-      <h3>Interfaz</h3>
+      <h3>Tema</h3>
       <div className="row swatches" role="radiogroup" aria-label="Color">
         {config.accents.map((a) => (
           <button key={a} role="radio" aria-checked={v.accent === a} className={v.accent === a ? "on" : ""} style={{ borderColor: ACCENT_COLOR[a] ?? "#fff" }}
                   onClick={() => send({ type: "config.set", values: { accent: a } })} data-testid={`accent-${a}`}>
-            <i style={{ background: ACCENT_COLOR[a] ?? "#fff" }} />{a}
+            <i style={{ background: ACCENT_COLOR[a] ?? "#fff" }} />{THEMES[a]?.label ?? a}
           </button>
         ))}
       </div>

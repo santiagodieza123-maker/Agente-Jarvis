@@ -29,7 +29,7 @@ def test_defaults_validation_and_persistence(tmp_path):
 
 @pytest.mark.parametrize("bad", [
     {"max_steps": 0}, {"max_steps": 51}, {"max_steps": True}, {"max_steps": "5"}, {"max_steps": 5.5},
-    {"max_failures": 11}, {"approval_timeout": 9}, {"token_budget": -1}, {"browser_headed": 1}, {"accent": "rojo"},
+    {"max_failures": 11}, {"approval_timeout": 9}, {"token_budget": -1}, {"browser_headed": 1}, {"accent": "turquesa"},
     {"model": "a/b"}, {"model": "m?x=1"}, {"model": "../x"}, {"model": ""}, {"model": "x" * 65}, {"model": 5},
     {"nope": 1}, {}, None, [],
 ])
@@ -43,7 +43,7 @@ def test_invalid_updates_rejected(tmp_path, bad):
 def test_update_is_all_or_nothing(tmp_path):
     s = SettingsStore(tmp_path / "s.json")
     with pytest.raises(SettingsError):
-        s.update({"max_steps": 30, "accent": "rojo"})
+        s.update({"max_steps": 30, "accent": "turquesa"})
     assert s.values["max_steps"] == 15
 
 
@@ -206,7 +206,7 @@ def test_model_change_rebuilds_provider_and_persists(tmp_path, monkeypatch):
 
 def test_invalid_set_leaves_everything_unchanged(tmp_path, monkeypatch):
     h, bus, audit, q = build(tmp_path, Fake(), monkeypatch)
-    asyncio.run(h({"type": "config.set", "values": {"max_steps": 5, "accent": "rojo"}}))
+    asyncio.run(h({"type": "config.set", "values": {"max_steps": 5, "accent": "turquesa"}}))
     assert h.config.store.values["max_steps"] == 15
     assert any(e["type"] == "ui.notice" for e in drain(q))
     assert audit.verify()
