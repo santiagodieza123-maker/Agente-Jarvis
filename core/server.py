@@ -18,8 +18,9 @@ DEFAULT_ORIGINS = frozenset({"tauri://localhost", "http://tauri.localhost", "htt
 
 class HudServer:
     def __init__(self, bus: EventBus, token: str | None = None,
-                 allowed_origins=DEFAULT_ORIGINS, port: int = 0):
+                 allowed_origins=DEFAULT_ORIGINS, port: int = 0, on_message=None):
         self.bus = bus
+        self.on_message = on_message  # callable(dict) -> None | awaitable; mensajes JSON del HUD
         self.token = token or secrets.token_urlsafe(32)
         self.allowed_origins = frozenset(allowed_origins)
         self.port = port
@@ -44,8 +45,15 @@ class HudServer:
                 while True:
                     await ws.send(json.dumps(await q.get()))
             sender = asyncio.create_task(pump())
-            async for raw in ws:  # mensajes del HUD (aprobaciones, órdenes): pendiente de cablear
-                self.bus.publish("state.changed", {"hud_message": str(raw)[:200]})
+            async for raw in ws:
+                try:
+                    msg = json.loads(raw)
+                except (TypeError, ValueError):
+                    continue
+                if isinstance(msg, dict) and self.on_message is not None:
+                    res = self.on_message(msg)
+                    if asyncio.iscoroutine(res):
+                        await res
             sender.cancel()
         finally:
             self.bus.unsubscribe(q)

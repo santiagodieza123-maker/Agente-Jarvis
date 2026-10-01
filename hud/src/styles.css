@@ -1,0 +1,21 @@
+:root { --c: #2fb8ff; --bg: rgba(4, 14, 28, 0.78); font-family: "Segoe UI", system-ui, sans-serif; color: #cfeeff; }
+html, body, #root { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+.hud { height: 100%; display: grid; grid-template: "h h" auto "o c" 1fr "o t" 1fr / 1.2fr 1fr; gap: 12px; padding: 12px; box-sizing: border-box; background: radial-gradient(circle at 30% 50%, #06213a, #020a14 70%); }
+.hud.awaiting { --c: #ffb020; } .hud.error { --c: #ff3b3b; } .hud.acting { --c: #00ffd0; } .hud.killed { --c: #773333; }
+header { grid-area: h; display: flex; align-items: center; justify-content: space-between; letter-spacing: .35em; color: var(--c); border-bottom: 1px solid var(--c); padding-bottom: 6px; }
+.status { font-size: .75rem; letter-spacing: .2em; }
+.orb { grid-area: o; min-height: 0; }
+.panel { background: var(--bg); border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; min-height: 0; box-shadow: 0 0 14px color-mix(in srgb, var(--c) 25%, transparent) inset; }
+.panel h2 { margin: 0 0 8px; font-size: .7rem; letter-spacing: .3em; color: var(--c); }
+.console { grid-area: c; } .timeline { grid-area: t; }
+.log { flex: 1; overflow-y: auto; font-size: .85rem; } .log p { margin: 0 0 6px; } .log b { color: var(--c); margin-right: 6px; font-size: .7rem; } .log .user { opacity: .75; }
+input { background: transparent; border: 1px solid var(--c); color: inherit; padding: 8px; width: 100%; box-sizing: border-box; border-radius: 4px; }
+ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; font-size: .8rem; }
+li { display: flex; align-items: center; gap: 8px; padding: 3px 0; } li em { margin-left: auto; opacity: .6; font-style: normal; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #888; }
+li.running .dot { background: #00ffd0; animation: p 1s infinite; } li.ok .dot { background: #3ddc84; } li.failed .dot, li.denied .dot { background: #ff3b3b; }
+@keyframes p { 50% { opacity: .25; } }
+.panic { background: #5a0f0f; color: #fff; border: 1px solid #ff3b3b; letter-spacing: .2em; padding: 4px 12px; cursor: pointer; border-radius: 4px; }
+.approvals { position: fixed; inset: auto 24px 24px auto; max-width: 420px; border-color: #ffb020; z-index: 10; }
+.approvals pre { max-height: 120px; overflow: auto; background: #0008; padding: 6px; font-size: .75rem; }
+.approvals button { margin-right: 8px; padding: 6px 14px; cursor: pointer; } .approvals .deny { background: #5a0f0f; color: #fff; } .warn { color: #ffb020; }
