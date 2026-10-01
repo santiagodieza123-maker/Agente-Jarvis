@@ -5,7 +5,8 @@ requires-python = ">=3.11"
 dependencies = ["pydantic>=2", "websockets>=13", "langgraph>=1.0"]
 
 [project.optional-dependencies]
-windows = ["mss", "uiautomation", "comtypes", "playwright", "keyring"]
+windows = ["mss", "uiautomation", "comtypes", "keyring"]
+web = ["playwright>=1.56"]   # luego: playwright install chromium
 dev = ["pytest"]
 
 [tool.pytest.ini_options]

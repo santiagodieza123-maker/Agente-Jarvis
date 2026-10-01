@@ -11,6 +11,8 @@ from core.llm.provider import LLMProvider
 from core.orchestrator import Orchestrator
 from core.policy import Policy
 from core.tools_fs import FsTools
+from core.tools_shell import ShellTools
+from core.tools_web import WebTools
 
 
 def workspace_roots() -> list[Path]:
@@ -28,11 +30,15 @@ def wire(llm: LLMProvider | None, bus: EventBus, audit: AuditLog, roots: list[Pa
     if llm is None:
         return handlers
     fs = FsTools(roots)
+    shell = ShellTools(roots[0])
+    web = WebTools(os.environ.get("JARVIS_BROWSER_PROFILE", str(Path.home() / ".jarvis" / "browser-profile")),
+                   headless=os.environ.get("JARVIS_BROWSER_HEADED") != "1")   # perfil dedicado, nunca el del usuario
+    tools = {t.name: t for t in (*fs.tools(), *shell.tools(), *web.tools())}
 
     async def approver(approval_id, action, args) -> bool:
         return await handlers.request(approval_id, approval_timeout)
 
-    orch = Orchestrator(llm, {t.name: t for t in fs.tools()}, Policy(allowed_roots=[str(r.resolve()) for r in roots]),
+    orch = Orchestrator(llm, tools, Policy(allowed_roots=[str(r.resolve()) for r in roots]),
                         audit, bus, approver)
 
     async def run_task(goal: str) -> None:

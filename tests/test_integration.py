@@ -138,3 +138,37 @@ def test_second_task_rejected_while_running(tmp_path):
         await ws.send(json.dumps({"type": "approval", "id": req["payload"]["id"], "granted": False}))
 
     asyncio.run(session(tmp_path, Scripted(call("fs.delete", path=str(f)), LLMResponse(text="x")), hud))
+
+
+@pytest.mark.skipif(os.name == "nt", reason="comando POSIX")
+@pytest.mark.parametrize("granted", [False, True])
+def test_shell_exec_always_needs_hud_approval(tmp_path, granted):
+    marker = tmp_path / "ws" / "hecho"; (tmp_path / "ws").mkdir()
+
+    async def hud(ws, events):
+        await ws.send(json.dumps({"type": "task", "goal": "crea hecho"}))
+        req = await pump_until(ws, events, lambda e: e["type"] == "approval.requested")
+        assert req["payload"]["tool"] == "shell.exec" and req["payload"]["args"]["command"] == f"touch {marker}"
+        assert not marker.exists()
+        await ws.send(json.dumps({"type": "approval", "id": req["payload"]["id"], "granted": granted}))
+        await pump_until(ws, events, lambda e: e["type"] == "state.changed" and e["payload"].get("state") == "idle")
+
+    llm = Scripted(call("shell.exec", command=f"touch {marker}"), LLMResponse(text="listo"))
+    asyncio.run(session(tmp_path, llm, hud))
+    assert marker.exists() is granted
+
+
+def test_tool_schemas_exposed_to_llm(tmp_path):
+    seen = {}
+
+    class Spy(Scripted):
+        def generate(self, system, messages, tools, image_png=None):
+            seen["names"] = {t["name"] for t in tools}
+            return super().generate(system, messages, tools, image_png)
+
+    async def hud(ws, events):
+        await ws.send(json.dumps({"type": "task", "goal": "x"}))
+        await pump_until(ws, events, lambda e: e["type"] == "state.changed" and e["payload"].get("state") == "idle")
+
+    asyncio.run(session(tmp_path, Spy(LLMResponse(text="ok")), hud))
+    assert {"fs.read", "fs.delete", "shell.exec", "web.open", "web.click", "web.type", "web.read"} <= seen["names"]
