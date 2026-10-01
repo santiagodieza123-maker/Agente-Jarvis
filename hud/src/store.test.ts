@@ -147,3 +147,15 @@ describe("system.stats", () => {
     expect(s.stats[0].gpu?.name).toBe("RTX"); expect(s.stats[0].llm.last_ms).toBeNull();
   });
 });
+
+describe("broker.changed", () => {
+  it("acepta el estado del broker y normaliza campos", () => {
+    const s = apply(ev("broker.changed", { available: true, running: true, elevated: true, pid: 12, dry_run: false, services: ["Spooler", 5, "W32Time"], error: "" }));
+    expect(s.broker).toEqual({ available: true, running: true, elevated: true, pid: 12, dry_run: false, services: ["Spooler", "W32Time"], error: "" });
+    expect(apply(ev("broker.changed", { available: false, running: false })).broker?.available).toBe(false);
+  });
+  it("ignora estados inválidos y conserva el anterior", () => {
+    const ok = apply(ev("broker.changed", { available: true, running: false }));
+    expect(reduce(ok, { kind: "event", event: ev("broker.changed", { available: "si" }) }).broker).toBe(ok.broker);
+  });
+});

@@ -1,11 +1,45 @@
 import { useState } from "react";
-import type { HudMessage, PermissionsSnapshot } from "../events";
+import type { BrokerSnapshot, HudMessage, PermissionsSnapshot } from "../events";
 
 const LABEL: Record<string, string> = {
   read: "Lectura", write_reversible: "Escritura reversible", destructive: "Destructiva", elevated: "Elevada",
 };
 
-export function PermissionsPanel({ perms, send }: { perms: PermissionsSnapshot | null; send: (m: HudMessage) => void }) {
+function Broker({ b, send }: { b: BrokerSnapshot | null; send: (m: HudMessage) => void }) {
+  const [svc, setSvc] = useState("");
+  if (!b) return null;
+  return (
+    <div className="broker" data-testid="broker">
+      <h3>Broker elevado (administrador)</h3>
+      <p className="hint" data-testid="broker-state">
+        {!b.available ? "No disponible: solo existe en Windows."
+          : b.running ? <>✔ En marcha{b.elevated ? " con privilegios de administrador" : " (SIN elevar: las operaciones fallarán)"}{b.dry_run ? " · modo simulación" : ""} · pid {b.pid}</>
+          : <>Detenido. {b.error && <span className="warn">{b.error}</span>}</>}
+      </p>
+      {b.available && (
+        <>
+          <div className="row">
+            {!b.running
+              ? <button onClick={() => send({ type: "broker.start" })} data-testid="broker-start" title="Windows mostrará su aviso de UAC: solo tú puedes aceptarlo">Iniciar (pedirá UAC)</button>
+              : <button className="deny" onClick={() => send({ type: "broker.stop" })} data-testid="broker-stop">Detener</button>}
+          </div>
+          {b.running && (
+            <>
+              <p className="hint">Servicios que Jarvis puede controlar: {b.services?.length ? b.services.map((s) => <code key={s}>{s} </code>) : "ninguno"}</p>
+              <form className="row" onSubmit={(e) => { e.preventDefault(); const n = svc.trim(); if (n) { send({ type: "broker.allow_service", name: n }); setSvc(""); } }}>
+                <input value={svc} onChange={(e) => setSvc(e.target.value)} placeholder="Permitir un servicio (p. ej. Spooler)…" aria-label="Servicio" data-testid="broker-svc" />
+                <button disabled={!svc.trim()}>Permitir</button>
+              </form>
+            </>
+          )}
+          <p className="hint">Solo hay dos operaciones: instalar con winget y controlar servicios permitidos. Cada una pide tu confirmación en el HUD <b>y</b> otra en una ventana propia del broker, que el agente no puede pulsar.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function PermissionsPanel({ perms, broker, send }: { perms: PermissionsSnapshot | null; broker: BrokerSnapshot | null; send: (m: HudMessage) => void }) {
   const [root, setRoot] = useState("");
   if (!perms) return <section className="panel"><h2>PERMISOS</h2><p className="empty">Cargando…</p></section>;
 
@@ -52,6 +86,7 @@ export function PermissionsPanel({ perms, send }: { perms: PermissionsSnapshot |
         <input value={root} onChange={(e) => setRoot(e.target.value)} placeholder="Ruta absoluta de una carpeta…" aria-label="Nueva carpeta" />
         <button disabled={!root.trim()}>Añadir</button>
       </form>
+      <Broker b={broker} send={send} />
     </section>
   );
 }

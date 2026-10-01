@@ -23,6 +23,7 @@ export function useJarvis() {
         s.send(JSON.stringify({ type: "permissions.get" }));
         s.send(JSON.stringify({ type: "config.get" }));
         s.send(JSON.stringify({ type: "extensions.get" }));
+        s.send(JSON.stringify({ type: "broker.status" }));
       };
       s.onmessage = (m) => { const e = parseEvent(String(m.data)); if (e && live()) dispatch({ kind: "event", event: e }); };
       s.onclose = () => { if (!live()) return; dispatch({ kind: "conn", conn: "closed" }); retry = window.setTimeout(connect, 2000); };

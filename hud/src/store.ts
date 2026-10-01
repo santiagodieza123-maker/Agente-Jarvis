@@ -1,5 +1,5 @@
 import { MAX_ROWS, asAudit, mergeRecent, asRecord, asVerified, matches, type AuditRecord, type AuditSnapshot, type AuditVerified } from "./audit";
-import { asConfig, asExtensions, asFrame, asMemory, asStats, asPermissions, type ConfigSnapshot, type ExtensionsSnapshot, type Frame, type JarvisEvent, type Stats, type MemorySnapshot, type PermissionsSnapshot } from "./events";
+import { asBroker, asConfig, asExtensions, asFrame, asMemory, asStats, asPermissions, type BrokerSnapshot, type ConfigSnapshot, type ExtensionsSnapshot, type Frame, type JarvisEvent, type Stats, type MemorySnapshot, type PermissionsSnapshot } from "./events";
 
 export type AgentState = "idle" | "thinking" | "acting" | "awaiting" | "error" | "killed";
 export type Conn = "connecting" | "open" | "closed";
@@ -25,6 +25,7 @@ export interface HudState {
   extensions: ExtensionsSnapshot | null;
   stats: Stats[];                 // últimas muestras del sistema (para los gráficos)
   transcript: { id: string; text?: string; silent?: boolean; error?: string; n: number } | null;   // última transcripción de voz
+  broker: BrokerSnapshot | null;
   frame: Frame | null;            // última captura que «ve» el agente
   notice: { level: string; text: string; id: number } | null;
   audit: AuditSnapshot | null;
@@ -32,7 +33,7 @@ export interface HudState {
   recent: AuditRecord[];          // últimos registros recibidos en vivo: cubren la carrera con una consulta en curso
 }
 
-export const initial: HudState = { conn: "connecting", agent: "idle", plan: "", timeline: [], approvals: [], chat: [], memory: null, permissions: null, config: null, extensions: null, frame: null, transcript: null, stats: [], notice: null, audit: null, auditVerified: null, recent: [] };
+export const initial: HudState = { conn: "connecting", agent: "idle", plan: "", timeline: [], approvals: [], chat: [], memory: null, permissions: null, config: null, extensions: null, frame: null, broker: null, transcript: null, stats: [], notice: null, audit: null, auditVerified: null, recent: [] };
 
 export type Action =
   | { kind: "conn"; conn: Conn }
@@ -86,6 +87,8 @@ export function reduce(s: HudState, a: Action): HudState {
       return { ...s, permissions: asPermissions(p) ?? s.permissions };
     case "config.changed":
       return { ...s, config: asConfig(p) ?? s.config };
+    case "broker.changed":
+      return { ...s, broker: asBroker(p) ?? s.broker };
     case "voice.transcript":
       return typeof p.id === "string" ? { ...s, transcript: { id: p.id, text: typeof p.text === "string" ? p.text : undefined, silent: p.silent === true, error: typeof p.error === "string" ? p.error : undefined, n: (s.transcript?.n ?? 0) + 1 } } : s;
     case "system.stats": {

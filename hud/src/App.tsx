@@ -76,7 +76,7 @@ export default function App() {
         {tab === "consola" && <VoiceBar voice={voice} />}
         {tab === "consola" && <Console chat={state.chat} disabled={state.conn !== "open"} onSubmit={submitTask} />}
         {tab === "memoria" && <MemoryPanel memory={state.memory} send={send} />}
-        {tab === "permisos" && <PermissionsPanel perms={state.permissions} send={send} />}
+        {tab === "permisos" && <PermissionsPanel perms={state.permissions} broker={state.broker} send={send} />}
         {tab === "mcp" && <ExtensionsPanel ext={state.extensions} send={send} />}
         {tab === "visión" && <VisionPanel frame={state.frame} />}
         {tab === "sistema" && <SystemPanel stats={state.stats} />}

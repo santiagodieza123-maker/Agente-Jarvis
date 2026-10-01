@@ -9,7 +9,7 @@ VERSION = "0.1.0"
 EVENT_TYPES = frozenset({
     "plan.updated", "action.started", "action.finished", "perception.frame",
     "approval.requested", "approval.granted", "approval.denied",
-    "memory.changed", "permissions.changed", "config.changed", "extensions.changed", "system.stats", "voice.transcript", "audit.changed", "audit.appended", "audit.verified", "ui.notice", "state.changed", "kill.triggered",
+    "memory.changed", "permissions.changed", "config.changed", "extensions.changed", "system.stats", "voice.transcript", "broker.changed", "audit.changed", "audit.appended", "audit.verified", "ui.notice", "state.changed", "kill.triggered",
 })
 
 

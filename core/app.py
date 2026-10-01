@@ -8,6 +8,8 @@ from pathlib import Path
 from core.audit import AuditLog, clip
 from core.bus import EventBus
 from core.hud_config import ConfigHandlers
+from core.broker_client import BrokerClient
+from core.hud_broker import BrokerHandlers
 from core.hud_extensions import ExtensionHandlers
 from core.hud_handlers import HudHandlers
 from core.hud_recipes import RecipeHandlers
@@ -24,6 +26,7 @@ from core.sensitive import sensitive_hits
 from core.usage import UsageStore
 from core.settings import DEFAULTS, SecretStore, SettingsStore
 from core.tools_fs import FsTools
+from core.tools_elevated import ElevatedTools
 from core.tools_gui import GuiTools
 from core.tools_shell import ShellTools
 from core.tools_web import WebTools
@@ -43,6 +46,7 @@ def jarvis_home() -> Path:
     return Path(os.environ.get("JARVIS_HOME", str(Path.home() / ".jarvis")))
 
 
+AUTO_BROKER = object()       # wire(..., broker_client=AUTO_BROKER): cliente del broker en Windows; None = sin herramientas elevated
 AUTO_GUI = object()          # wire(..., gui_backend=AUTO_GUI): UI Automation si estamos en Windows y está instalado; None = sin herramientas gui
 
 
@@ -67,7 +71,7 @@ def build_llm(model: str, key: str | None) -> LLMProvider | None:
 
 
 def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
-         exit_fn=os._exit, approval_timeout: float = 120.0, home: Path | None = None, gui_backend=AUTO_GUI) -> HudHandlers:
+         exit_fn=os._exit, approval_timeout: float = 120.0, home: Path | None = None, gui_backend=AUTO_GUI, broker_client=AUTO_BROKER, broker_launch=None) -> HudHandlers:
     home = home or jarvis_home()
     audit.on_append = lambda rec: bus.publish("audit.appended", clip(rec))     # el HUD ve el log en vivo
     handlers = HudHandlers(bus, audit, exit_fn=exit_fn)
@@ -81,7 +85,9 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
                    headless=not cfg.values["browser_headed"])   # perfil dedicado, nunca el del usuario
     gui = default_gui_backend() if gui_backend is AUTO_GUI else gui_backend
     gui_tools = GuiTools(gui, on_frame=lambda f: bus.publish("perception.frame", f)).tools() if gui is not None else []
-    tools = {t.name: t for t in (*fs.tools(), *shell.tools(), *web.tools(), *gui_tools)}
+    broker = (BrokerClient(home) if os.name == "nt" else None) if broker_client is AUTO_BROKER else broker_client
+    elevated_tools = ElevatedTools(broker).tools() if broker is not None else []
+    tools = {t.name: t for t in (*fs.tools(), *shell.tools(), *web.tools(), *gui_tools, *elevated_tools)}
     policy = Policy(allowed_roots=[str(r.resolve()) for r in roots])
     memory = Memory(home / "memory.db")
     perms = PermissionStore(home / "permissions.json", policy, fs, roots, tools, protected=[REPO, home])
@@ -126,6 +132,7 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
         return comps
     handlers.components = components
     handlers.extra.append(VoiceHandlers(bus, audit, holder))
+    handlers.extra.append(BrokerHandlers(bus, audit, broker, home, broker_launch))
     handlers.extra.append(RecipeHandlers(bus, audit, memory, orch, handlers, tools, lambda n: n not in perms.disabled,
                                          policy._path_allowed, settings.publish_memory))
 

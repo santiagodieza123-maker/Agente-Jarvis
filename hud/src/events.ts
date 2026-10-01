@@ -2,7 +2,7 @@
 export const EVENT_TYPES = [
   "plan.updated", "action.started", "action.finished", "perception.frame",
   "approval.requested", "approval.granted", "approval.denied",
-  "memory.changed", "permissions.changed", "config.changed", "extensions.changed", "system.stats", "voice.transcript", "audit.changed", "audit.appended", "audit.verified", "ui.notice", "state.changed", "kill.triggered",
+  "memory.changed", "permissions.changed", "config.changed", "extensions.changed", "system.stats", "voice.transcript", "broker.changed", "audit.changed", "audit.appended", "audit.verified", "ui.notice", "state.changed", "kill.triggered",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -55,6 +55,10 @@ export type HudMessage =
   | { type: "recipes.set_preconditions"; id: number; items: Precondition[] }
   | { type: "recipes.run"; id: number; params?: Record<string, string> }
   | { type: "voice.transcribe"; id: string; mime: string; audio: string }
+  | { type: "broker.status" }
+  | { type: "broker.start" }
+  | { type: "broker.stop" }
+  | { type: "broker.allow_service"; name: string }
   | { type: "audit.get"; limit?: number; event?: string; text?: string }
   | { type: "audit.export"; event?: string; text?: string }
   | { type: "audit.verify" };
@@ -151,4 +155,11 @@ export function asStats(p: Record<string, unknown>): Stats | null {
   return { ts: p.ts as number, uptime: p.uptime as number, threads: p.threads as number, loop_lag_ms: p.loop_lag_ms as number, clients: p.clients as number,
     cpu: { process: c.process as number, system: c.system as number, cores: c.cores as number }, memory: { rss: m.rss as number, system_percent: m.system_percent as number, system_total: m.system_total as number },
     gpu, children, components, llm: { calls: l.calls as number, errors: l.errors as number, last_ms: opt(l.last_ms), avg_ms: opt(l.avg_ms), p95_ms: opt(l.p95_ms), ready: l.ready as boolean, model: typeof l.model === "string" ? l.model : null } };
+}
+
+export interface BrokerSnapshot { available: boolean; running: boolean; elevated?: boolean; pid?: number | null; dry_run?: boolean; services?: string[]; error?: string }
+export function asBroker(p: Record<string, unknown>): BrokerSnapshot | null {
+  if (typeof p.available !== "boolean" || typeof p.running !== "boolean") return null;
+  return { available: p.available, running: p.running, elevated: p.elevated === true, pid: typeof p.pid === "number" ? p.pid : null, dry_run: p.dry_run === true,
+    services: isArr(p.services) ? (p.services as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 50) : [], error: typeof p.error === "string" ? p.error.slice(0, 200) : "" };
 }
