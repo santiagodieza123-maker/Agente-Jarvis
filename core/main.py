@@ -6,6 +6,7 @@ import signal
 import sys
 
 from core.audit import AuditLog
+from core.settings import SecretStore
 from core.env import load_dotenv
 from core.bus import EventBus
 from core.app import FROM_CONFIG, jarvis_home, wire, workspace_roots
@@ -15,7 +16,12 @@ from core.server import HudServer
 async def run() -> None:
     load_dotenv()
     bus = EventBus()
-    audit = AuditLog(jarvis_home() / "audit.jsonl")
+    home = jarvis_home()
+    secrets = SecretStore(home / "secrets.json")
+    # Auditoría autenticada: la clave HMAC vive en el almacén de secretos (Credential Manager o archivo 0600), no junto al log.
+    audit = AuditLog(home / "audit.jsonl", key=secrets.get_or_create_bytes("audit_hmac_key"), anchor=home / "audit.anchor",
+                     keyed_before=secrets.get("audit_keyed") is not None)
+    secrets.set("1", name="audit_keyed")
     handlers = wire(FROM_CONFIG, bus, audit, workspace_roots())
     server = HudServer(bus, port=int(os.environ.get("JARVIS_CORE_PORT", "8765")), on_message=handlers,
                        on_connect=lambda: audit.append("hud.connected"))

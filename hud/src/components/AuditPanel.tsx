@@ -6,9 +6,9 @@ const fmt = (ts: number) => (ts ? new Date(ts * 1000).toLocaleTimeString() : "�
 
 function Status({ v, total }: { v: AuditVerified | null; total: number }) {
   if (!v) return <span className="vstat" data-testid="verify-status">Sin verificar</span>;
-  if (!v.ok) return <span className="vstat bad" data-testid="verify-status">✖ CADENA ROTA en la línea {v.bad_line} ({v.count} registros válidos antes)</span>;
+  if (!v.ok) return <span className="vstat bad" data-testid="verify-status">✖ CADENA ROTA {v.bad_line ? `en la línea ${v.bad_line}` : v.reason ? `(${v.reason})` : ""} ({v.count} registros válidos antes)</span>;
   const later = total - v.count;
-  return <span className="vstat good" data-testid="verify-status">✔ Cadena íntegra · {v.count} registros{later > 0 ? ` (+${later} posteriores sin verificar)` : ""}</span>;
+  return <span className="vstat good" data-testid="verify-status">✔ Cadena íntegra{v.keyed ? " y autenticada (HMAC)" : " (sin clave: no detecta una reescritura completa)"} · {v.count} registros{later > 0 ? ` (+${later} posteriores sin verificar)` : ""}</span>;
 }
 
 export function AuditPanel({ audit, verified, send }: { audit: AuditSnapshot | null; verified: AuditVerified | null; send: (m: HudMessage) => void }) {

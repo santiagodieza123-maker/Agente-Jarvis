@@ -39,3 +39,15 @@ describe("audit", () => {
     expect(asRecord({ seq: 1, event: "e", hash: "h", data: {} })).not.toBeNull();
   });
 });
+
+describe("asVerified con HMAC", () => {
+  it("acepta los campos nuevos y los antiguos", () => {
+    expect(asVerified({ ok: true, count: 3, bad_line: null, head: "h", keyed: true, reason: null })).not.toBeNull();
+    expect(asVerified({ ok: false, count: 3, bad_line: null, head: "h", keyed: true, reason: "faltan registros" })?.reason).toBe("faltan registros");
+    expect(asVerified({ ok: true, count: 3, bad_line: null, head: "h" })).not.toBeNull();
+  });
+});
+
+describe("severity de manipulación", () => {
+  it("marca como grave la detección de manipulación", () => { expect(severity("audit.tamper_detected")).toBe("bad"); });
+});

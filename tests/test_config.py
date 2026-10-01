@@ -288,3 +288,27 @@ def test_unknown_config_message_is_consumed_and_garbage_safe(tmp_path, monkeypat
     for m in ({"type": "config.nope"}, {"type": "config.set"}, {"type": "config.set", "values": "x"}, {"type": "config.set_api_key"}):
         asyncio.run(h(m))
     assert h.config.store.values["max_steps"] == 15
+
+
+# ---------- secretos con nombre ----------
+def test_named_secrets_coexist_and_clear_is_selective(tmp_path):
+    s = SecretStore(tmp_path / "sec.json", keyring_mod=None)
+    s.set(KEY)
+    k1 = s.get_or_create_bytes("audit_hmac_key")
+    assert len(k1) == 32 and s.get_or_create_bytes("audit_hmac_key") == k1            # estable entre llamadas
+    assert SecretStore(tmp_path / "sec.json", keyring_mod=None).get_or_create_bytes("audit_hmac_key") == k1
+    s.clear()                                                                          # quita solo la clave de Gemini
+    assert s.get() is None and s.get_or_create_bytes("audit_hmac_key") == k1
+    s.clear("audit_hmac_key")
+    assert not (tmp_path / "sec.json").exists()
+
+
+def test_named_secret_with_keyring_and_garbage_file(tmp_path):
+    kr = FakeKeyring()
+    s = SecretStore(tmp_path / "sec.json", keyring_mod=kr)
+    k = s.get_or_create_bytes("audit_hmac_key")
+    assert kr.store[("jarvis", "audit_hmac_key")] == k.hex() and not (tmp_path / "sec.json").exists()
+    (tmp_path / "bad.json").write_text("[1,2]")
+    assert SecretStore(tmp_path / "bad.json", keyring_mod=None).get() is None
+    (tmp_path / "bad2.json").write_text('{"audit_hmac_key": "corta"}')
+    assert len(SecretStore(tmp_path / "bad2.json", keyring_mod=None).get_or_create_bytes("audit_hmac_key")) == 32   # valor inválido: se regenera

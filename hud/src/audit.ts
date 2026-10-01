@@ -6,7 +6,7 @@ export interface AuditFilters { event: string; text: string; limit: number }
 export interface AuditSnapshot {
   records: AuditRecord[]; matched: number; total: number; event_types: string[]; head: string; truncated: boolean; filters: AuditFilters;
 }
-export interface AuditVerified { ok: boolean; count: number; bad_line: number | null; head: string }
+export interface AuditVerified { ok: boolean; count: number; bad_line: number | null; head: string; keyed?: boolean; reason?: string | null }
 
 export function asAudit(p: Record<string, unknown>): AuditSnapshot | null {
   return Array.isArray(p.records) && Array.isArray(p.event_types) && typeof p.filters === "object" && p.filters !== null
@@ -32,7 +32,7 @@ export function matches(r: AuditRecord, f: AuditFilters): boolean {
 
 export type Severity = "bad" | "warn" | "info" | "good" | "neutral";
 export function severity(event: string): Severity {
-  if (/denied|rejected|aborted|crashed|kill|corrupt/.test(event)) return "bad";
+  if (/denied|rejected|aborted|crashed|kill|corrupt|tamper/.test(event)) return "bad";
   if (event.startsWith("approval") || event.startsWith("permissions.")) return "warn";
   if (event.startsWith("task.")) return "info";
   if (event === "action.finished" || event.startsWith("memory.")) return "good";

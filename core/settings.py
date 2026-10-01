@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 
 ACCENTS = ("cian", "ámbar", "verde", "magenta")
@@ -95,7 +97,8 @@ class SettingsStore:
 
 
 class SecretStore:
-    """Credential Manager (vía `keyring`) cuando está disponible; si no, un archivo 0600 en la carpeta de Jarvis."""
+    """Credential Manager (vía `keyring`) cuando está disponible; si no, un archivo 0600 en la carpeta de Jarvis.
+    Guarda varios secretos con nombre: la clave de Gemini, la clave HMAC de la auditoría, etc."""
 
     SERVICE, NAME = "jarvis", "gemini_api_key"
 
@@ -123,47 +126,67 @@ class SecretStore:
             raise SettingsError("clave inválida (16–256 caracteres: letras, números, '.', '_' y '-')")
         return key.strip()
 
-    def _file_get(self) -> str | None:
+    # --- archivo (un JSON {nombre: valor}); ---
+    def _file_read(self) -> dict:
         try:
-            v = json.loads(self.path.read_text(encoding="utf-8")).get(self.NAME)
-            return v if isinstance(v, str) and v else None
-        except (OSError, ValueError, AttributeError):
-            return None
+            d = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return {k: v for k, v in d.items() if isinstance(k, str) and isinstance(v, str) and v} if isinstance(d, dict) else {}
 
-    def get(self) -> str | None:
+    def _file_write(self, d: dict) -> None:
+        if d:
+            _atomic_write(self.path, json.dumps(d), 0o600)
+        else:
+            with suppress(OSError):
+                self.path.unlink()
+
+    # --- API ---
+    def get(self, name: str | None = None) -> str | None:
+        name = name or self.NAME
         if self._kr:
             try:
-                v = self._kr.get_password(self.SERVICE, self.NAME)
+                v = self._kr.get_password(self.SERVICE, name)
                 if v:
                     return v
             except Exception:
                 pass
-        return self._file_get()
+        return self._file_read().get(name)
 
-    def set(self, key: str) -> None:
-        key = self.validate(key)
+    def _put(self, name: str, value: str) -> None:
         if self._kr:
             try:
-                self._kr.set_password(self.SERVICE, self.NAME, key)
-                self._file_clear()
+                self._kr.set_password(self.SERVICE, name, value)
+                d = self._file_read()
+                if d.pop(name, None) is not None:
+                    self._file_write(d)
                 return
             except Exception:
                 pass                        # el almacén del sistema falló: se usa el archivo
-        _atomic_write(self.path, json.dumps({self.NAME: key}), 0o600)
+        d = self._file_read()
+        d[name] = value
+        self._file_write(d)
 
-    def _file_clear(self) -> None:
-        try:
-            self.path.unlink()
-        except OSError:
-            pass
+    def set(self, key: str, name: str | None = None) -> None:
+        """Guarda la clave de API (validada) o, con `name`, otro secreto."""
+        self._put(name or self.NAME, self.validate(key) if name in (None, self.NAME) else key)
 
-    def clear(self) -> None:
+    def clear(self, name: str | None = None) -> None:
+        name = name or self.NAME
         if self._kr:
-            try:
-                self._kr.delete_password(self.SERVICE, self.NAME)
-            except Exception:
-                pass
-        self._file_clear()
+            with suppress(Exception):
+                self._kr.delete_password(self.SERVICE, name)
+        d = self._file_read()
+        if d.pop(name, None) is not None:
+            self._file_write(d)
+
+    def get_or_create_bytes(self, name: str) -> bytes:
+        """Secreto binario aleatorio (hex en el almacén); se crea la primera vez."""
+        v = self.get(name)
+        if not v or len(v) != 64:
+            v = secrets.token_hex(32)
+            self._put(name, v)
+        return bytes.fromhex(v)
 
     @staticmethod
     def hint(key: str) -> str:
