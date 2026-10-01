@@ -77,6 +77,12 @@ export function ConfigPanel({ config, send }: { config: ConfigSnapshot | null; s
         Mostrar el navegador del agente <em>(al reiniciar)</em>
       </label>
 
+      <label className="check">
+        <input type="checkbox" checked={v.confirm_with_extensions !== false} data-testid="confirm-ext"
+          onChange={(e) => send({ type: "config.set", values: { confirm_with_extensions: e.target.checked } })} />
+        Confirmar las escrituras mientras haya extensiones externas activas <em>(recomendado)</em>
+      </label>
+
       <h3>Consumo de la sesión</h3>
       <p className="hint" data-testid="usage">{config.usage.calls} llamadas · {config.usage.input.toLocaleString()} tokens de entrada · {config.usage.output.toLocaleString()} de salida</p>
 

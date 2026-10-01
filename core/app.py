@@ -67,7 +67,7 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
     settings = SettingsHandlers(bus, audit, memory, perms)
     handlers.extra.append(settings)
     manager = ExtensionManager(home / "extensions.json", tools, audit, lambda: ext_handlers.publish(),
-                               lambda: perms.disabled, roots[0], home / "ext-logs")
+                               lambda: perms.disabled, roots[0], home / "ext-logs", secrets=SecretStore(home / "secrets.json"))
     ext_handlers = ExtensionHandlers(bus, manager, perms, settings.publish_permissions)
     handlers.extra.append(ext_handlers)
     handlers.panic_hooks = [shell.kill_all, web.close, manager.stop_all]
@@ -81,7 +81,10 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
         return await handlers.request(approval_id, timeout["v"])
 
     orch = Orchestrator(holder, tools, policy, audit, bus, approver,
-                        is_enabled=lambda n: n not in perms.disabled, memory_block=memory.prompt_block)
+                        is_enabled=lambda n: n not in perms.disabled, memory_block=memory.prompt_block,
+                        workdir=lambda: perms.roots[0] if perms.roots else None,
+                        external_context=lambda: cfg.values["confirm_with_extensions"] and any(
+                            n.startswith("mcp.") and n not in perms.disabled for n in tools))
 
     def apply(rebuild: bool) -> None:
         """Aplica en caliente los ajustes; rebuild=True recrea el proveedor (cambio de modelo o de clave)."""

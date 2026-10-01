@@ -24,11 +24,13 @@ class ExtensionHandlers:
             if kind == "extensions.add":
                 if msg.get("confirmed") is not True:          # el HUD debe haber mostrado el comando exacto al usuario
                     raise ExtensionError("falta la confirmación del usuario")
-                await self.mgr.add(msg.get("name"), msg.get("command"))
+                await self.mgr.add(msg.get("name"), msg.get("command"), msg.get("env"))
             elif kind == "extensions.remove":
                 await self.mgr.remove(msg.get("name"))
             elif kind == "extensions.set_enabled":
                 await self.mgr.set_enabled(msg.get("name"), msg.get("enabled"))
+            elif kind == "extensions.set_env":
+                await self.mgr.set_env(msg.get("name"), msg.get("env"))
             elif kind == "extensions.restart":
                 await self.mgr.restart(msg.get("name"))
             elif kind == "extensions.set_trust":

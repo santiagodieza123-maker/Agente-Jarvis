@@ -22,10 +22,11 @@ SPEC: dict[str, tuple] = {
     "approval_timeout": (int, 10, 600, False),
     "token_budget": (int, 0, 5_000_000, False),
     "browser_headed": (bool, None, None, True),
+    "confirm_with_extensions": (bool, None, None, False),
     "accent": (str, None, None, False),
 }
 DEFAULTS = {"model": "gemini-3.1-flash-lite", "max_steps": 15, "max_failures": 3, "approval_timeout": 120,
-            "token_budget": 0, "browser_headed": False, "accent": "cian"}
+            "token_budget": 0, "browser_headed": False, "accent": "cian", "confirm_with_extensions": True}
 
 
 class SettingsError(ValueError):

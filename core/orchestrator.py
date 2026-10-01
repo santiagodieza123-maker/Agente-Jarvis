@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import os
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, TypedDict
@@ -72,6 +73,8 @@ class Orchestrator:
     token_budget: int = 0        # tokens (entrada+salida) por tarea; 0 = sin límite
     is_enabled: Callable[[str], bool] = lambda name: True      # herramientas deshabilitadas desde el HUD
     memory_block: Callable[[], str] = lambda: ""                # notas del usuario para el prompt
+    workdir: Callable[[], Any] = lambda: None                    # carpeta de trabajo (primera raíz permitida)
+    external_context: Callable[[], bool] = lambda: False        # hay herramientas de extensiones externas en el contexto del LLM
     _graph: Any = field(init=False, repr=False, default=None)
 
     def __post_init__(self):
@@ -103,7 +106,9 @@ class Orchestrator:
             self.audit.append("task.aborted", reason="max_tokens", tokens=s["tokens"])
             return {"status": "aborted", "answer": f"Presupuesto de tokens agotado ({s['tokens']}/{self.token_budget})."}
         schemas = [t.schema() for t in self.tools.values() if self.is_enabled(t.name)]
-        r = await asyncio.to_thread(self.llm.generate, SYSTEM + self.memory_block(), s["messages"], schemas)
+        wd = self.workdir()
+        where = f"\nCarpeta de trabajo: {wd}. Las rutas relativas se resuelven dentro de ella." if wd else ""
+        r = await asyncio.to_thread(self.llm.generate, SYSTEM + where + self.memory_block(), s["messages"], schemas)
         tokens = s["tokens"] + r.input_tokens + r.output_tokens
         self.bus.publish("plan.updated", {"text": r.text, "next": r.tool_calls[0].name if r.tool_calls else None})
         if not r.tool_calls:
@@ -129,8 +134,14 @@ class Orchestrator:
             self.audit.append("action.rejected", tool=call.name, reason="unknown_tool")
             return {"steps": steps, "pending": None, "failures": s["failures"] + 1,
                     "messages": self._record(s, f"herramienta desconocida: {call.name}")}
+        wd = self.workdir()
+        if tool.path_arg and wd:                       # ruta relativa del modelo -> dentro de la carpeta de trabajo
+            rel = call.args.get(tool.path_arg)
+            if isinstance(rel, str) and rel and not os.path.isabs(rel) and not rel.startswith(("/", "\\")):
+                call.args[tool.path_arg] = os.path.join(str(wd), rel)
         path = call.args.get(tool.path_arg) if tool.path_arg else None
-        origin = Origin.OBSERVED if s["tainted"] else Origin.USER
+        ext_ctx = self.external_context()
+        origin = Origin.OBSERVED if s["tainted"] or ext_ctx else Origin.USER
         action = Action(tool.name, tool.cls, origin, path)
         decision = self.policy.evaluate(action)
         self.audit.append("action.evaluated", tool=tool.name, cls=tool.cls.value,
@@ -138,7 +149,8 @@ class Orchestrator:
 
         if decision is Decision.CONFIRM:
             aid = uuid.uuid4().hex[:12]
-            self.bus.publish("approval.requested", {"id": aid, "tool": tool.name, "args": call.args, "origin": origin.value})
+            self.bus.publish("approval.requested", {"id": aid, "tool": tool.name, "args": call.args, "origin": origin.value,
+                                                       "why": "content" if s["tainted"] else ("extensions" if ext_ctx else "")})
             granted = await self.approver(aid, action, call.args)
             self.audit.append("approval.resolved", id=aid, tool=tool.name, granted=granted)
             self.bus.publish("approval.granted" if granted else "approval.denied", {"id": aid, "tool": tool.name})

@@ -42,7 +42,8 @@ export type HudMessage =
   | { type: "config.clear_api_key" }
   | { type: "config.test_llm" }
   | { type: "extensions.get" }
-  | { type: "extensions.add"; name: string; command: string; confirmed: true }
+  | { type: "extensions.add"; name: string; command: string; confirmed: true; env?: Record<string, string> }
+  | { type: "extensions.set_env"; name: string; env: Record<string, string> }
   | { type: "extensions.remove"; name: string }
   | { type: "extensions.set_enabled"; name: string; enabled: boolean }
   | { type: "extensions.restart"; name: string }
@@ -68,7 +69,7 @@ export function asPermissions(p: Record<string, unknown>): PermissionsSnapshot |
 
 export interface ConfigValues {
   model: string; max_steps: number; max_failures: number; approval_timeout: number;
-  token_budget: number; browser_headed: boolean; accent: string;
+  token_budget: number; browser_headed: boolean; accent: string; confirm_with_extensions?: boolean;
 }
 export interface ConfigSnapshot {
   values: ConfigValues;
@@ -92,7 +93,7 @@ export function asConfig(p: Record<string, unknown>): ConfigSnapshot | null {
 }
 
 export interface ExtTool { name: string; raw: string; description: string; trusted: boolean; enabled: boolean }
-export interface Extension { name: string; command: string; enabled: boolean; state: "stopped" | "starting" | "running" | "error"; error: string; tools: ExtTool[]; log: string }
+export interface Extension { name: string; command: string; env_names?: string[]; enabled: boolean; state: "stopped" | "starting" | "running" | "error"; error: string; tools: ExtTool[]; log: string }
 export interface ExtensionsSnapshot { extensions: Extension[]; limits: { extensions: number; tools: number } }
 export function asExtensions(p: Record<string, unknown>): ExtensionsSnapshot | null {
   if (!isArr(p.extensions) || !p.limits || typeof p.limits !== "object") return null;

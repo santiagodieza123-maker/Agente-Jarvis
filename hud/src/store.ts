@@ -10,7 +10,7 @@ export interface TimelineItem {
   tool: string;
   status: "running" | "ok" | "failed" | "denied";
 }
-export interface Approval { id: string; tool: string; args: unknown; origin: string }
+export interface Approval { id: string; tool: string; args: unknown; origin: string; why?: string }
 
 export interface HudState {
   conn: Conn;
@@ -67,7 +67,7 @@ export function reduce(s: HudState, a: Action): HudState {
       return { ...s, timeline, agent: "thinking" };
     }
     case "approval.requested":
-      return { ...s, agent: "awaiting", approvals: [...s.approvals, { id: String(p.id ?? tool), tool, args: p.args, origin: String(p.origin ?? "") }] };
+      return { ...s, agent: "awaiting", approvals: [...s.approvals, { id: String(p.id ?? tool), tool, args: p.args, origin: String(p.origin ?? ""), why: String(p.why ?? "") }] };
     case "approval.granted":
     case "approval.denied": {
       const denied = type === "approval.denied";

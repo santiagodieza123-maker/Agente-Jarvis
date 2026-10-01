@@ -323,3 +323,85 @@ def test_core_shutdown_by_sigterm_leaves_no_orphan_servers(tmp_path):
     finally:
         if core.poll() is None:
             core.kill()
+
+
+# ---------- variables de entorno por extensión ----------
+def test_parse_env_validation():
+    assert M.parse_env({"API_TOKEN": "abc"}) == {"API_TOKEN": "abc"} and M.parse_env(None) == {} and M.parse_env({}) == {}
+    for bad in ({"1X": "a"}, {"A B": "a"}, {"A": ""}, {"A": 5}, {"A": "x" * 501}, {"A": "a\x00b"}, "A=1", [("A", "1")],
+                {f"V{i}": "x" for i in range(17)}, {f"V{i}": "x" * 400 for i in range(6)}):
+        with pytest.raises(M.ExtensionError):
+            M.parse_env(bad)
+
+
+def test_extension_env_reaches_server_but_never_disk_log_or_hud(tmp_path, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "clave-gemini-que-no-debe-llegar")
+    async def go():
+        h, bus, audit, q = build(tmp_path)
+        await h({"type": "extensions.add", "name": "echo", "command": cmd(), "confirmed": True, "env": {"MI_TOKEN": "valor-secreto-123"}})
+        assert await wait_for(lambda: h.extensions.exts["echo"].state == "running")
+        run = h.extensions.tools["mcp.echo.entorno"].run
+        assert await run(nombre="MI_TOKEN") == "valor-secreto-123"
+        assert await run(nombre="GEMINI_API_KEY") == "<no definida>"                   # la clave de Gemini no se hereda
+        s = snap(q)["extensions"][0]
+        assert s["env_names"] == ["MI_TOKEN"] and "valor-secreto-123" not in json.dumps(s)
+        # cambiar las variables reinicia la extensión con los nuevos valores
+        await h({"type": "extensions.set_env", "name": "echo", "env": {"MI_TOKEN": "otro-valor-456"}})
+        assert await wait_for(lambda: h.extensions.exts["echo"].state == "running" and "mcp.echo.entorno" in h.extensions.tools)
+        assert await h.extensions.tools["mcp.echo.entorno"].run(nombre="MI_TOKEN") == "otro-valor-456"
+        await h.extensions.stop_all()
+        home = tmp_path / "home"
+        for f in (home / "extensions.json", tmp_path / "a.jsonl"):
+            txt = f.read_text()
+            assert "valor-secreto-123" not in txt and "otro-valor-456" not in txt, f
+        assert "MI_TOKEN" in (tmp_path / "a.jsonl").read_text()                         # sí queda el nombre, para auditar
+        await h({"type": "extensions.remove", "name": "echo"})
+        assert "ext_env_echo" not in (home / "secrets.json").read_text() if (home / "secrets.json").exists() else True
+    asyncio.run(go())
+
+
+def test_invalid_env_rejects_the_whole_add(tmp_path):
+    async def go():
+        h, bus, audit, q = build(tmp_path)
+        await h({"type": "extensions.add", "name": "echo", "command": cmd(), "confirmed": True, "env": {"mal nombre": "x"}})
+        assert h.extensions.exts == {} and not (tmp_path / "home" / "secrets.json").exists()
+    asyncio.run(go())
+
+
+# ---------- contexto no confiable por extensiones activas ----------
+def test_writes_need_confirmation_while_external_tools_are_active_and_setting_can_disable_it(tmp_path):
+    async def go():
+        ws = tmp_path / "ws"; ws.mkdir(parents=True, exist_ok=True)
+        f1, f2 = ws / "uno.txt", ws / "dos.txt"
+        llm = Scripted(LLMResponse(tool_calls=[ToolCall("fs.write", {"path": str(f1), "content": "a"})]), LLMResponse(text="fin"),
+                       LLMResponse(tool_calls=[ToolCall("fs.write", {"path": str(f2), "content": "b"})]), LLMResponse(text="fin"))
+        h, bus, audit, q = build(tmp_path, llm)
+        await h({"type": "extensions.add", "name": "echo", "command": cmd(), "confirmed": True})
+        assert await wait_for(lambda: h.extensions.exts["echo"].state == "running")
+        await h({"type": "task", "goal": "escribe"})
+        assert await wait_for(lambda: any(e["type"] == "approval.requested" for e in list(q._queue)), 10)
+        req = next(e for e in list(q._queue) if e["type"] == "approval.requested")["payload"]
+        assert req["tool"] == "fs.write" and req["origin"] == "observed" and req["why"] == "extensions"
+        await h({"type": "approval", "id": req["id"], "granted": True})
+        await h._task
+        assert f1.read_text() == "a"
+        # desactivando el ajuste, la escritura vuelve a ir sin confirmar
+        await h({"type": "config.set", "values": {"confirm_with_extensions": False}})
+        while not q.empty():
+            q.get_nowait()
+        await h({"type": "task", "goal": "escribe otra"})
+        await h._task
+        assert f2.read_text() == "b"
+        await h.extensions.stop_all()
+    asyncio.run(go())
+
+
+def test_no_extension_means_no_extra_confirmation(tmp_path):
+    async def go():
+        ws = tmp_path / "ws"; ws.mkdir(parents=True, exist_ok=True)
+        llm = Scripted(LLMResponse(tool_calls=[ToolCall("fs.write", {"path": str(ws / "x.txt"), "content": "a"})]), LLMResponse(text="fin"))
+        h, bus, audit, q = build(tmp_path, llm)
+        await h({"type": "task", "goal": "escribe"})
+        await h._task
+        assert (ws / "x.txt").read_text() == "a"
+    asyncio.run(go())

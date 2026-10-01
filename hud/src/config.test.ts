@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { changed, parseLimits } from "./config";
+import { changed, parseEnvLines, parseLimits } from "./config";
 import { asConfig } from "./events";
 import { initial, reduce } from "./store";
 
@@ -54,5 +54,16 @@ describe("asExtensions", () => {
     expect(asExtensions({ extensions: [{ ...e, tools: [{ name: 1 }] }], limits: {} })).toBeNull();
     expect(asExtensions({ extensions: [{ ...e, enabled: "si" }], limits: {} })).toBeNull();
     expect(asExtensions({ extensions: "x" })).toBeNull();
+  });
+});
+
+describe("parseEnvLines", () => {
+  it("parsea NOMBRE=valor, comentarios y líneas vacías", () => {
+    expect(parseEnvLines("# nota\n\nTOKEN=abc=def\n  OTRA = 1 \r\n")).toEqual({ ok: true, env: { TOKEN: "abc=def", OTRA: "1" } });
+    expect(parseEnvLines("")).toEqual({ ok: true, env: {} });
+  });
+  it("rechaza líneas inválidas, valores vacíos y repetidas", () => {
+    for (const bad of ["sin igual", "=x", "1A=x", "A B=x", "A=", "A=1\nA=2"]) expect(parseEnvLines(bad).ok).toBe(false);
+    expect(parseEnvLines(Array.from({ length: 17 }, (_, i) => `V${i}=x`).join("\n")).ok).toBe(false);
   });
 });

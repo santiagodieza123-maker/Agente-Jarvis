@@ -48,6 +48,12 @@ def dormir(seg: float) -> str:
     return "ok"
 
 
+@mcp.tool()
+def entorno(nombre: str) -> str:
+    """Devuelve el valor de una variable de entorno (para probar el paso de variables)."""
+    return os.environ.get(nombre, "<no definida>")
+
+
 @mcp.tool(name="raro nombre/1")
 def raro() -> str:
     """Nombre con caracteres raros."""

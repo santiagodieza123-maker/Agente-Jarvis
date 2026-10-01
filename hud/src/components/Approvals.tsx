@@ -8,7 +8,7 @@ export function Approvals({ items, onDecide }: { items: Approval[]; onDecide: (a
       {items.map((a) => (
         <div key={a.id} className="req">
           <code>{a.tool}</code>
-          {a.origin === "observed" && <strong className="warn"> ⚠ originada tras leer contenido no confiable</strong>}
+          {a.origin === "observed" && <strong className="warn"> ⚠ {a.why === "extensions" ? "hay extensiones externas activas: confirma las escrituras" : "originada tras leer contenido no confiable"}</strong>}
           <pre>{JSON.stringify(a.args, null, 2)}</pre>
           <button onClick={() => onDecide(a, true)}>Permitir</button>
           <button className="deny" onClick={() => onDecide(a, false)}>Denegar</button>

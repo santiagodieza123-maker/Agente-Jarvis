@@ -306,3 +306,23 @@ def test_audit_get_rejects_invalid_params(tmp_path, bad):
         assert "inválida" in n["payload"]["text"]
 
     asyncio.run(session(tmp_path, None, hud))
+
+
+def test_relative_paths_resolve_inside_the_workspace_and_prompt_names_it(tmp_path):
+    class Spy(Scripted):
+        def generate(self, system, messages, tools, image_png=None):
+            self.systems = getattr(self, "systems", []) + [system]
+            return super().generate(system, messages, tools, image_png)
+
+    ws = tmp_path / "ws"; ws.mkdir()
+    llm = Spy(call("fs.write", path="notas/hola.txt", content="hola"), call("fs.write", path="../fuera.txt", content="x"),
+              call("fs.write", path="/etc/evil.txt", content="x"), LLMResponse(text="fin"))
+    (ws / "notas").mkdir()
+
+    async def hud(ws_, events):
+        await ws_.send(json.dumps({"type": "task", "goal": "escribe"}))
+        await pump_until(ws_, events, lambda e: e["type"] == "state.changed" and e["payload"].get("state") == "idle")
+    asyncio.run(session(tmp_path, llm, hud))
+    assert (ws / "notas" / "hola.txt").read_text() == "hola"                   # la ruta relativa quedó dentro de la raíz
+    assert not (tmp_path / "fuera.txt").exists() and not os.path.exists("/etc/evil.txt")   # `..` y rutas absolutas ajenas, denegadas
+    assert all(f"Carpeta de trabajo: {ws.resolve()}" in s for s in llm.systems)

@@ -23,6 +23,8 @@ NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,23}$")
 _PROP_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,63}$")
 _TYPES = {"string", "number", "integer", "boolean", "array", "object"}
 _CTRL = re.compile(r"[\x00-\x1f\x7f]+")
+ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+MAX_ENV_VARS, MAX_ENV_JSON = 16, 2000        # el Credential Manager de Windows admite ~2,5 KB por entrada
 
 
 class ExtensionError(ValueError):
@@ -37,6 +39,22 @@ def first_line(text, limit: int) -> str:
     """Solo la primera línea no vacía: lo que viene después de un salto de línea es donde suelen esconderse las instrucciones."""
     lines = [l for l in str(text or "").splitlines() if l.strip()]
     return one_line(lines[0] if lines else "", limit)
+
+
+def parse_env(env) -> dict[str, str]:
+    """Variables de entorno de una extensión (p. ej. un token). Se guardan en el almacén de secretos, nunca en extensions.json."""
+    if env in (None, {}):
+        return {}
+    if not isinstance(env, dict) or len(env) > MAX_ENV_VARS:
+        raise ExtensionError(f"variables de entorno inválidas (máx. {MAX_ENV_VARS})")
+    out = {}
+    for k, v in env.items():
+        if not (isinstance(k, str) and ENV_NAME.match(k) and isinstance(v, str) and 0 < len(v) <= 500 and "\x00" not in v):
+            raise ExtensionError(f"variable inválida: {str(k)[:40]} (nombre A-Z0-9_, valor de 1 a 500 caracteres)")
+        out[k] = v
+    if len(json.dumps(out)) > MAX_ENV_JSON:
+        raise ExtensionError(f"variables demasiado largas en total (máx. {MAX_ENV_JSON} caracteres)")
+    return out
 
 
 def parse_cmdline(line, nt: bool | None = None) -> list[str]:
@@ -155,8 +173,9 @@ class Extension:
 
 class ExtensionManager:
     def __init__(self, path: str | Path, tools: dict[str, Tool], audit, notify: Callable[[], None],
-                 disabled: Callable[[], set], cwd: Path, log_dir: str | Path):
+                 disabled: Callable[[], set], cwd: Path, log_dir: str | Path, secrets=None):
         self.path, self.tools, self.audit, self.notify, self.disabled = Path(path), tools, audit, notify, disabled
+        self.secrets = secrets
         self.cwd, self.log_dir = Path(cwd), Path(log_dir)
         self.exts: dict[str, Extension] = {}
         self._load()
@@ -190,8 +209,42 @@ class ExtensionManager:
             raise ExtensionError("extensión desconocida")
         return self.exts[name]
 
+    # ---------- variables de entorno (secretas) ----------
+    @staticmethod
+    def _env_key(name: str) -> str:
+        return f"ext_env_{name}"
+
+    def _env(self, name: str) -> dict[str, str]:
+        if self.secrets is None:
+            return {}
+        try:
+            d = json.loads(self.secrets.get(self._env_key(name)) or "{}")
+            return parse_env(d)
+        except (ValueError, ExtensionError):
+            return {}
+
+    def _store_env(self, name: str, env: dict[str, str]) -> None:
+        if self.secrets is None:
+            if env:
+                raise ExtensionError("no hay almacén de secretos disponible para las variables de entorno")
+            return
+        if env:
+            self.secrets.set(json.dumps(env), name=self._env_key(name))
+        else:
+            self.secrets.clear(self._env_key(name))
+
+    async def set_env(self, name, env) -> None:
+        ext = self._get(name)
+        clean = parse_env(env)
+        self._store_env(name, clean)
+        self.audit.append("ext.env", name=name, vars=sorted(clean))          # solo los nombres, nunca los valores
+        if ext.enabled:
+            await self.restart(name)
+        else:
+            self.notify()
+
     # ---------- altas y bajas ----------
-    async def add(self, name, command_line) -> None:
+    async def add(self, name, command_line, env=None) -> None:
         if not isinstance(name, str) or not NAME_RE.match(name):
             raise ExtensionError("nombre inválido: minúsculas, números, '-' y '_', empezando por letra (máx. 24)")
         if name in self.exts:
@@ -199,11 +252,13 @@ class ExtensionManager:
         if len(self.exts) >= MAX_EXTENSIONS:
             raise ExtensionError(f"máximo {MAX_EXTENSIONS} extensiones")
         argv = parse_cmdline(command_line)
+        clean_env = parse_env(env)
         if shutil.which(argv[0]) is None:
             raise ExtensionError(f"no se encontró el ejecutable: {argv[0]}")
+        self._store_env(name, clean_env)
         self.exts[name] = Extension(name, argv)
         self._save()
-        self.audit.append("ext.add", name=name, argv=argv)
+        self.audit.append("ext.add", name=name, argv=argv, env=sorted(clean_env))
         self.start(name)
 
     async def remove(self, name) -> None:
@@ -211,6 +266,7 @@ class ExtensionManager:
         await self._stop(ext)
         del self.exts[name]
         self._save()
+        self._store_env(name, {})
         with suppress(OSError):
             self._log_path(name).unlink()
         self.audit.append("ext.remove", name=name)
@@ -279,7 +335,7 @@ class ExtensionManager:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         log = open(self._log_path(ext.name), "w", encoding="utf-8", errors="replace")
         try:
-            params = StdioServerParameters(command=ext.argv[0], args=ext.argv[1:], cwd=str(self.cwd))
+            params = StdioServerParameters(command=ext.argv[0], args=ext.argv[1:], cwd=str(self.cwd), env=self._env(ext.name) or None)
             async with stdio_client(params, errlog=log) as (r, w):
                 async with ClientSession(r, w) as sess:
                     await asyncio.wait_for(sess.initialize(), START_TIMEOUT)
@@ -375,6 +431,7 @@ class ExtensionManager:
         off = self.disabled()
         return {"extensions": [{
             "name": e.name, "command": " ".join(e.argv), "enabled": e.enabled, "state": e.state, "error": e.error,
+            "env_names": sorted(self._env(e.name)),
             "tools": [{"name": full, "raw": raw, "description": self.tools[full].description if full in self.tools else "",
                        "trusted": raw in e.trusted, "enabled": full not in off} for full, raw in e.tools.items()],
             "log": self._log_tail(e.name),
