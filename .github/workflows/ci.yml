@@ -1,0 +1,93 @@
+name: CI
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: pruebas (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11", cache: pip }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: hud/package-lock.json }
+      - name: Dependencias de Python
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then EXTRA=",windows"; else EXTRA=""; fi
+          python -m pip install -U pip
+          pip install -e ".[dev,web,mcp$EXTRA]"
+          playwright install chromium
+      - name: Escaneo de secretos
+        run: python tools/scan_secrets.py
+      - name: pytest
+        run: python -m pytest -q -p no:cacheprovider
+      - name: HUD (tipos, pruebas, build)
+        working-directory: hud
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npx vitest run
+          npm run build
+      - name: Dependencias de Tauri (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libsoup-3.0-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: hud/src-tauri }
+      - name: cargo test (shell de Tauri)
+        working-directory: hud/src-tauri
+        run: cargo test
+
+  windows-verify:
+    name: verificación en Windows (verify_windows.py)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11", cache: pip }
+      - name: Dependencias
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[dev,web,windows]"
+          playwright install chromium
+      - name: verify_windows.py
+        run: python tools/verify_windows.py
+      - name: Informe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-report
+          path: |
+            verify_report.txt
+            verify_report.json
+
+  tauri-windows:
+    name: HUD de Tauri en Windows (compilación)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: hud/package-lock.json }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: hud/src-tauri }
+      - name: Frontend
+        working-directory: hud
+        run: |
+          npm ci
+          npm run build
+      - name: cargo build --release
+        working-directory: hud/src-tauri
+        run: cargo build --release --features tauri/custom-protocol
+      - name: Binario
+        shell: bash
+        run: ls -la hud/src-tauri/target/release/jarvis-hud.exe
