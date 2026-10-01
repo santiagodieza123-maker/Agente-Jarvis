@@ -147,3 +147,28 @@ def test_5xx_still_uses_short_retries_and_notifies():
     p = quota_provider([LLMError("HTTP 503: x"), LLMError("HTTP 500: y"), OK], sleeps, waits)
     assert p.generate("s", [{"role": "user", "content": "x"}], []).tool_calls
     assert sleeps == [1, 2] and [w[1] for w in waits] == ["red o servidor"] * 2
+
+
+def test_falls_back_to_next_model_when_server_keeps_failing():
+    waits = []
+    p, calls = provider([LLMError("HTTP 503: x")] * 3 + [OK], retries=2, sleep=lambda s: None)
+    p.on_wait = lambda s, why: waits.append(why)
+    r = p.generate("s", [{"role": "user", "content": "x"}], [])
+    assert r.tool_calls[0].name == "fs.read"
+    assert calls[2][0].endswith("models/gemini-3.1-flash-lite:generateContent")
+    assert calls[3][0].endswith("models/gemini-3.5-flash-lite:generateContent")
+    assert p.model == "gemini-3.1-flash-lite" and any("probando gemini-3.5-flash-lite" in w for w in waits)
+
+
+def test_no_fallback_on_non_server_errors():
+    p, calls = provider([LLMError("HTTP 400: mala petición")], sleep=lambda s: None)
+    with pytest.raises(LLMError):
+        p.generate("s", [{"role": "user", "content": "x"}], [])
+    assert len(calls) == 1
+
+
+def test_raises_after_all_models_fail():
+    p, calls = provider([LLMError("HTTP 503: x")] * 12, retries=0, fallbacks=("b", "c"), sleep=lambda s: None)
+    with pytest.raises(LLMError):
+        p.generate("s", [{"role": "user", "content": "x"}], [])
+    assert len(calls) == 3

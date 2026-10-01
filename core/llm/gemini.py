@@ -11,6 +11,7 @@ from core.llm.provider import LLMProvider, LLMResponse, ToolCall
 
 BASE = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_MODEL = "gemini-3.1-flash-lite"
+FALLBACK_MODELS = ("gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash-lite")     # se prueban en orden si el modelo elegido falla por servidor/red
 
 
 class LLMError(RuntimeError):
@@ -56,11 +57,12 @@ def _http_post(url: str, headers: dict, body: dict, timeout: float) -> dict:
 class GeminiProvider(LLMProvider):
     def __init__(self, api_key: str, model: str = DEFAULT_MODEL, timeout: float = 60.0,
                  post: Callable[[str, dict, dict, float], dict] = _http_post, retries: int = 2,
-                 sleep: Callable[[float], None] | None = None):
+                 sleep: Callable[[float], None] | None = None, fallbacks: tuple[str, ...] = FALLBACK_MODELS):
         if not api_key:
             raise ValueError("falta GEMINI_API_KEY")
         self._key, self.model, self.timeout, self._post, self.retries = api_key, model, timeout, post, retries
         self._sleep = sleep or (lambda s: time.sleep(s))
+        self.fallbacks = fallbacks
         self.on_wait: Callable[[float, str], None] | None = None     # aviso al usuario mientras se espera (cuota, red)
 
     @staticmethod
@@ -94,8 +96,21 @@ class GeminiProvider(LLMProvider):
         return out
 
     def _request(self, body: dict) -> dict:
+        """Prueba el modelo elegido y, si falla por servidor/red (500/503/red), los de `fallbacks` en orden. No cambia `self.model`."""
+        models = [self.model] + [m for m in self.fallbacks if m != self.model]
+        for i, model in enumerate(models):
+            try:
+                return self._request_model(model, body)
+            except LLMError as e:
+                if i == len(models) - 1 or not any(c in str(e) for c in ("HTTP 500", "HTTP 503", "red:")):
+                    raise
+                if self.on_wait:
+                    self.on_wait(0, f"{model} no disponible; probando {models[i + 1]}")
+        raise AssertionError("inalcanzable")
+
+    def _request_model(self, model: str, body: dict) -> dict:
         """POST a generateContent con reintentos (5xx/red) y espera de cuota (429)."""
-        url = f"{BASE}/models/{self.model}:generateContent"
+        url = f"{BASE}/models/{model}:generateContent"
         headers = {"Content-Type": "application/json", "x-goog-api-key": self._key}
 
         attempt = quota_waits = 0

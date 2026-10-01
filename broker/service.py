@@ -41,7 +41,8 @@ def main(argv: list[str] | None = None) -> int:
     from core.settings import SecretStore
     key = SecretStore(Path(a.home) / "secrets.json").get_or_create_bytes("broker_key")
     d = Path(a.dir) if a.dir else data_dir()
-    secure_dir(d)
+    if pw.is_admin():                  # sin privilegios (pruebas) no se bloquea la carpeta: el propio proceso no podría escribir su registro
+        secure_dir(d)
     approver = (lambda op, text: True) if a.insecure_auto_approve else pw.confirm_dialog
     if a.insecure_auto_approve:
         print("!!! MODO DE PRUEBA: el broker NO pedirá confirmación !!!", flush=True)
