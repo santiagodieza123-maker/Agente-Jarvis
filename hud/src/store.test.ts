@@ -110,3 +110,21 @@ describe("avisos de aprobación", () => {
     expect(s.approvals[1].warnings).toEqual([]);
   });
 });
+
+describe("perception.frame", () => {
+  const frame = { image: "QUJD", width: 100, height: 50, title: "Notas", process: "n.exe", seq: 2, highlight: 3, action: "clic en 3",
+    elements: [{ id: 3, name: "OK", role: "button", interactive: true, enabled: true, rect: [1, 2, 30, 20] }, { id: 4, name: "x", role: "text", interactive: false, enabled: true, rect: [0, 0, 1, 1] }, { id: "mal" }] };
+  it("guarda el marco válido y descarta elementos malformados", () => {
+    const s = apply(ev("perception.frame", frame));
+    expect(s.frame?.title).toBe("Notas"); expect(s.frame?.elements).toHaveLength(2); expect(s.frame?.highlight).toBe(3);
+  });
+  it("ignora marcos inválidos (imagen no base64, dimensiones, enormes) y conserva el anterior", () => {
+    const ok = apply(ev("perception.frame", frame));
+    for (const bad of [{ ...frame, image: "<script>" }, { ...frame, width: 0 }, { ...frame, image: "A".repeat(3_000_001) }, { ...frame, elements: "x" }, { ...frame, title: 5 }]) {
+      expect(reduce(ok, { kind: "event", event: ev("perception.frame", bad) }).frame).toBe(ok.frame);
+    }
+  });
+  it("el pánico borra la captura", () => {
+    expect(apply(ev("perception.frame", frame), ev("kill.triggered")).frame).toBeNull();
+  });
+});

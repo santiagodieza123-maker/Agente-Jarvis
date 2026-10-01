@@ -105,3 +105,16 @@ export function asExtensions(p: Record<string, unknown>): ExtensionsSnapshot | n
     && (e.tools as Record<string, unknown>[]).every((t) => !!t && typeof t.name === "string" && typeof t.raw === "string" && typeof t.trusted === "boolean" && typeof t.enabled === "boolean"));
   return ok ? (p as unknown as ExtensionsSnapshot) : null;
 }
+
+export interface FrameElement { id: number; name: string; role: string; interactive: boolean; enabled: boolean; rect: [number, number, number, number] }
+export interface Frame { image: string; width: number; height: number; title: string; process: string; seq: number; elements: FrameElement[]; highlight: number | null; action: string }
+const MAX_FRAME_B64 = 3_000_000;
+export function asFrame(p: Record<string, unknown>): Frame | null {
+  if (typeof p.image !== "string" || p.image.length === 0 || p.image.length > MAX_FRAME_B64 || !/^[A-Za-z0-9+/=]+$/.test(p.image)) return null;
+  if (!Number.isFinite(p.width) || !Number.isFinite(p.height) || (p.width as number) <= 0 || (p.height as number) <= 0) return null;
+  if (!isArr(p.elements) || typeof p.title !== "string" || typeof p.action !== "string") return null;
+  const els = (p.elements as Record<string, unknown>[]).filter((e) => !!e && typeof e.id === "number" && typeof e.role === "string" && typeof e.name === "string"
+    && typeof e.interactive === "boolean" && isArr(e.rect) && (e.rect as unknown[]).length === 4 && (e.rect as unknown[]).every((n) => Number.isFinite(n)));
+  return { image: p.image, width: p.width as number, height: p.height as number, title: p.title, process: String(p.process ?? ""), seq: Number(p.seq ?? 0),
+    elements: els.slice(0, 300) as unknown as FrameElement[], highlight: typeof p.highlight === "number" ? p.highlight : null, action: p.action };
+}

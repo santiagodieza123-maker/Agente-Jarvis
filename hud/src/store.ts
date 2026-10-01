@@ -1,5 +1,5 @@
 import { MAX_ROWS, asAudit, mergeRecent, asRecord, asVerified, matches, type AuditRecord, type AuditSnapshot, type AuditVerified } from "./audit";
-import { asConfig, asExtensions, asMemory, asPermissions, type ConfigSnapshot, type ExtensionsSnapshot, type JarvisEvent, type MemorySnapshot, type PermissionsSnapshot } from "./events";
+import { asConfig, asExtensions, asFrame, asMemory, asPermissions, type ConfigSnapshot, type ExtensionsSnapshot, type Frame, type JarvisEvent, type MemorySnapshot, type PermissionsSnapshot } from "./events";
 
 export type AgentState = "idle" | "thinking" | "acting" | "awaiting" | "error" | "killed";
 export type Conn = "connecting" | "open" | "closed";
@@ -23,13 +23,14 @@ export interface HudState {
   permissions: PermissionsSnapshot | null;
   config: ConfigSnapshot | null;
   extensions: ExtensionsSnapshot | null;
+  frame: Frame | null;            // última captura que «ve» el agente
   notice: { level: string; text: string; id: number } | null;
   audit: AuditSnapshot | null;
   auditVerified: AuditVerified | null;
   recent: AuditRecord[];          // últimos registros recibidos en vivo: cubren la carrera con una consulta en curso
 }
 
-export const initial: HudState = { conn: "connecting", agent: "idle", plan: "", timeline: [], approvals: [], chat: [], memory: null, permissions: null, config: null, extensions: null, notice: null, audit: null, auditVerified: null, recent: [] };
+export const initial: HudState = { conn: "connecting", agent: "idle", plan: "", timeline: [], approvals: [], chat: [], memory: null, permissions: null, config: null, extensions: null, frame: null, notice: null, audit: null, auditVerified: null, recent: [] };
 
 export type Action =
   | { kind: "conn"; conn: Conn }
@@ -82,6 +83,8 @@ export function reduce(s: HudState, a: Action): HudState {
       return { ...s, permissions: asPermissions(p) ?? s.permissions };
     case "config.changed":
       return { ...s, config: asConfig(p) ?? s.config };
+    case "perception.frame":
+      return { ...s, frame: asFrame(p) ?? s.frame };
     case "extensions.changed":
       return { ...s, extensions: asExtensions(p) ?? s.extensions };
     case "audit.changed": {
@@ -103,7 +106,7 @@ export function reduce(s: HudState, a: Action): HudState {
     case "ui.notice":
       return { ...s, notice: { level: String(p.level ?? "info"), text: String(p.text ?? "").slice(0, 300), id: ++seq } };
     case "kill.triggered":
-      return { ...s, agent: "killed", approvals: [] };
+      return { ...s, agent: "killed", approvals: [], frame: null };
     default:
       return s;
   }

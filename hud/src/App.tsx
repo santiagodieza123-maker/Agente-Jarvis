@@ -7,13 +7,14 @@ import { ExtensionsPanel } from "./components/ExtensionsPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { Orb } from "./components/Orb";
 import { PermissionsPanel } from "./components/PermissionsPanel";
+import { VisionPanel } from "./components/VisionPanel";
 import { Timeline } from "./components/Timeline";
 import { WindowControls } from "./components/WindowControls";
 import { ACCENT_COLOR } from "./config";
 import { useJarvis } from "./useJarvis";
 
-type Tab = "consola" | "memoria" | "permisos" | "auditoría" | "mcp" | "config";
-const TABS: Tab[] = ["consola", "memoria", "permisos", "auditoría", "mcp", "config"];
+type Tab = "consola" | "memoria" | "permisos" | "auditoría" | "mcp" | "visión" | "config";
+const TABS: Tab[] = ["consola", "memoria", "permisos", "auditoría", "mcp", "visión", "config"];
 
 export default function App() {
   const { state, send, submitTask, dispatch } = useJarvis();
@@ -48,6 +49,7 @@ export default function App() {
         {tab === "memoria" && <MemoryPanel memory={state.memory} send={send} />}
         {tab === "permisos" && <PermissionsPanel perms={state.permissions} send={send} />}
         {tab === "mcp" && <ExtensionsPanel ext={state.extensions} send={send} />}
+        {tab === "visión" && <VisionPanel frame={state.frame} />}
         {tab === "config" && <ConfigPanel config={state.config} send={send} />}
         {tab === "auditoría" && <AuditPanel audit={state.audit} verified={state.auditVerified} send={send} />}
       </div>
