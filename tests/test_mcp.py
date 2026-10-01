@@ -15,6 +15,7 @@ from core.audit import AuditLog
 from core.bus import EventBus
 from core.llm.provider import LLMProvider, LLMResponse, ToolCall
 from core.policy import ActionClass as C
+from tests.helpers import pid_alive
 
 SERVER = str(Path(__file__).parent / "fixtures" / "echo_server.py")
 
@@ -23,15 +24,7 @@ def cmd(pidfile=None, *extra):
     return " ".join(shlex.quote(x) for x in [sys.executable, SERVER, *(([str(pidfile)] if pidfile else []) + list(extra))])
 
 
-def alive(pid):
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    try:
-        return "Z" not in Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
-    except OSError:
-        return True
+alive = pid_alive
 
 
 async def wait_for(pred, t=15.0):
@@ -301,6 +294,7 @@ def test_garbage_messages(tmp_path):
     asyncio.run(go())
 
 
+@pytest.mark.skipif(os.name == "nt", reason="en Windows el cierre lo hace el Job Object del watchdog (verify_windows.py)")
 def test_core_shutdown_by_sigterm_leaves_no_orphan_servers(tmp_path):
     """Núcleo real como proceso: con una extensión activada, SIGTERM debe terminar también al servidor MCP."""
     import signal
