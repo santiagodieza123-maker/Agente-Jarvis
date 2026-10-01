@@ -28,6 +28,12 @@ describe("store", () => {
   it("la desconexión sin kill es error", () => {
     expect(reduce(initial, { kind: "conn", conn: "closed" }).agent).toBe("error");
   });
+  it("resuelve aprobaciones por id, no por nombre de herramienta", () => {
+    const s = apply(ev("approval.requested", { tool: "rm", id: "a" }), ev("approval.requested", { tool: "rm", id: "b" }),
+      ev("approval.granted", { tool: "rm", id: "a" }));
+    expect(s.approvals.map((x) => x.id)).toEqual(["b"]);
+    expect(s.agent).toBe("awaiting");
+  });
   it("al reconectar sale de error", () => {
     const s = reduce(reduce(initial, { kind: "conn", conn: "closed" }), { kind: "conn", conn: "open" });
     expect(s.agent).toBe("idle");

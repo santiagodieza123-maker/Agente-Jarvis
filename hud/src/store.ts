@@ -61,7 +61,7 @@ export function reduce(s: HudState, a: Action): HudState {
     case "approval.granted":
     case "approval.denied": {
       const denied = type === "approval.denied";
-      const approvals = s.approvals.filter((x) => x.tool !== tool);
+      const approvals = s.approvals.filter((x) => (p.id !== undefined ? x.id !== String(p.id) : x.tool !== tool));
       const timeline = denied ? [...s.timeline, { id: ++seq, ts: a.event.ts, tool, status: "denied" as const }].slice(-MAX_TIMELINE) : s.timeline;
       return { ...s, approvals, timeline, agent: approvals.length ? "awaiting" : "thinking" };
     }

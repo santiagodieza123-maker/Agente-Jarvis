@@ -7,6 +7,7 @@ las acciones siguientes se evalúan con Origin.OBSERVED hasta que termine la tar
 from __future__ import annotations
 
 import inspect
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, TypedDict
 
@@ -37,7 +38,7 @@ class Tool:
         return {"name": self.name, "description": self.description}
 
 
-Approver = Callable[[Action, dict], Awaitable[bool]]
+Approver = Callable[[str, Action, dict], Awaitable[bool]]  # (approval_id, action, args)
 
 
 class State(TypedDict):
@@ -116,12 +117,13 @@ class Orchestrator:
                           origin=origin.value, decision=decision.value, args=call.args)
 
         if decision is Decision.CONFIRM:
-            self.bus.publish("approval.requested", {"tool": tool.name, "args": call.args, "origin": origin.value})
-            if await self.approver(action, call.args):
-                self.bus.publish("approval.granted", {"tool": tool.name})
-            else:
+            aid = uuid.uuid4().hex[:12]
+            self.bus.publish("approval.requested", {"id": aid, "tool": tool.name, "args": call.args, "origin": origin.value})
+            granted = await self.approver(aid, action, call.args)
+            self.audit.append("approval.resolved", id=aid, tool=tool.name, granted=granted)
+            self.bus.publish("approval.granted" if granted else "approval.denied", {"id": aid, "tool": tool.name})
+            if not granted:
                 decision = Decision.DENY
-                self.bus.publish("approval.denied", {"tool": tool.name})
         if decision is Decision.DENY:
             self.audit.append("action.denied", tool=tool.name)
             return {"steps": steps, "pending": None, "failures": s["failures"] + 1,

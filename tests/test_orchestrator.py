@@ -21,7 +21,7 @@ def call(name, **a):
 
 
 def build(tmp_path, script, tools, approve=True, **kw):
-    async def approver(action, args):
+    async def approver(aid, action, args):
         approver.asked.append(action.tool)
         return approve
     approver.asked = []

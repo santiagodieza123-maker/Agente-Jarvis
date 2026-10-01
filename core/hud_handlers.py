@@ -3,16 +3,20 @@ from __future__ import annotations
 
 import asyncio
 import os
-from typing import Callable
+from typing import Awaitable, Callable
 
 from core.audit import AuditLog
 from core.bus import EventBus
 
+TaskRunner = Callable[[str], Awaitable[None]]
+
 
 class HudHandlers:
-    def __init__(self, bus: EventBus, audit: AuditLog, exit_fn: Callable[[int], None] = os._exit):
-        self.bus, self.audit, self.exit_fn = bus, audit, exit_fn
+    def __init__(self, bus: EventBus, audit: AuditLog, exit_fn: Callable[[int], None] = os._exit,
+                 run_task: TaskRunner | None = None):
+        self.bus, self.audit, self.exit_fn, self.run_task = bus, audit, exit_fn, run_task
         self._pending: dict[str, asyncio.Future] = {}
+        self._task: asyncio.Task | None = None
 
     async def __call__(self, msg: dict) -> None:
         kind = msg.get("type")
@@ -21,12 +25,27 @@ class HudHandlers:
         elif kind == "approval":
             fut = self._pending.get(str(msg.get("id")))
             if fut and not fut.done():
-                fut.set_result(bool(msg.get("granted")))
+                fut.set_result(msg.get("granted") is True)   # estrictamente True; cualquier otra cosa deniega
         elif kind == "task":
-            goal = str(msg.get("goal", ""))[:2000]
-            self.audit.append("task.received", goal=goal)
-            # Aún no hay proveedor LLM ni herramientas reales conectados.
+            await self._start_task(str(msg.get("goal", ""))[:2000])
+
+    async def _start_task(self, goal: str) -> None:
+        self.audit.append("task.received", goal=goal)
+        if self.run_task is None:
             self.bus.publish("plan.updated", {"text": "Núcleo sin proveedor LLM configurado: tarea registrada, no ejecutada."})
+            self.bus.publish("state.changed", {"state": "idle"})
+            return
+        if self._task and not self._task.done():
+            self.bus.publish("plan.updated", {"text": "Ya hay una tarea en curso; espera a que termine."})
+            return
+        self._task = asyncio.create_task(self._guarded(goal))
+
+    async def _guarded(self, goal: str) -> None:
+        try:
+            await self.run_task(goal)
+        except Exception as e:  # un fallo del planificador no debe tumbar el núcleo
+            self.audit.append("task.crashed", error=f"{type(e).__name__}: {e}")
+            self.bus.publish("plan.updated", {"text": f"La tarea falló: {type(e).__name__}"})
             self.bus.publish("state.changed", {"state": "idle"})
 
     async def panic(self) -> None:
