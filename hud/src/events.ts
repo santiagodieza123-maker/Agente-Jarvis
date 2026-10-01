@@ -2,7 +2,7 @@
 export const EVENT_TYPES = [
   "plan.updated", "action.started", "action.finished", "perception.frame",
   "approval.requested", "approval.granted", "approval.denied",
-  "memory.changed", "permissions.changed", "config.changed", "extensions.changed", "audit.changed", "audit.appended", "audit.verified", "ui.notice", "state.changed", "kill.triggered",
+  "memory.changed", "permissions.changed", "config.changed", "extensions.changed", "system.stats", "audit.changed", "audit.appended", "audit.verified", "ui.notice", "state.changed", "kill.triggered",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -125,4 +125,29 @@ export function asFrame(p: Record<string, unknown>): Frame | null {
     && typeof e.interactive === "boolean" && isArr(e.rect) && (e.rect as unknown[]).length === 4 && (e.rect as unknown[]).every((n) => Number.isFinite(n)));
   return { image: p.image, width: p.width as number, height: p.height as number, title: p.title, process: String(p.process ?? ""), seq: Number(p.seq ?? 0),
     elements: els.slice(0, 300) as unknown as FrameElement[], highlight: typeof p.highlight === "number" ? p.highlight : null, action: p.action };
+}
+
+export interface Stats {
+  ts: number; uptime: number; threads: number; loop_lag_ms: number; clients: number;
+  cpu: { process: number; system: number; cores: number };
+  memory: { rss: number; system_percent: number; system_total: number };
+  gpu: { name: string; util: number; mem_used: number; mem_total: number } | null;
+  children: { pid: number; name: string; cpu: number; rss: number }[];
+  llm: { calls: number; errors: number; last_ms: number | null; avg_ms: number | null; p95_ms: number | null; ready: boolean; model: string | null };
+  components: { name: string; state: string; detail: string }[];
+}
+const num = (v: unknown) => typeof v === "number" && Number.isFinite(v);
+export function asStats(p: Record<string, unknown>): Stats | null {
+  const c = p.cpu as Record<string, unknown> | undefined, m = p.memory as Record<string, unknown> | undefined, l = p.llm as Record<string, unknown> | undefined;
+  if (!num(p.ts) || !num(p.uptime) || !num(p.threads) || !num(p.loop_lag_ms) || !num(p.clients)) return null;
+  if (!c || !num(c.process) || !num(c.system) || !num(c.cores) || !m || !num(m.rss) || !num(m.system_percent) || !num(m.system_total)) return null;
+  if (!l || !num(l.calls) || !num(l.errors) || typeof l.ready !== "boolean" || !isArr(p.children) || !isArr(p.components)) return null;
+  const g = p.gpu as Record<string, unknown> | null;
+  const gpu = g && num(g.util) && num(g.mem_used) && num(g.mem_total) ? { name: String(g.name ?? ""), util: g.util as number, mem_used: g.mem_used as number, mem_total: g.mem_total as number } : null;
+  const children = (p.children as Record<string, unknown>[]).filter((k) => num(k.pid) && num(k.cpu) && num(k.rss)).slice(0, 20).map((k) => ({ pid: k.pid as number, name: String(k.name ?? ""), cpu: k.cpu as number, rss: k.rss as number }));
+  const components = (p.components as Record<string, unknown>[]).filter((k) => typeof k.name === "string" && typeof k.state === "string").slice(0, 40).map((k) => ({ name: String(k.name), state: String(k.state), detail: String(k.detail ?? "") }));
+  const opt = (v: unknown) => (num(v) ? (v as number) : null);
+  return { ts: p.ts as number, uptime: p.uptime as number, threads: p.threads as number, loop_lag_ms: p.loop_lag_ms as number, clients: p.clients as number,
+    cpu: { process: c.process as number, system: c.system as number, cores: c.cores as number }, memory: { rss: m.rss as number, system_percent: m.system_percent as number, system_total: m.system_total as number },
+    gpu, children, components, llm: { calls: l.calls as number, errors: l.errors as number, last_ms: opt(l.last_ms), avg_ms: opt(l.avg_ms), p95_ms: opt(l.p95_ms), ready: l.ready as boolean, model: typeof l.model === "string" ? l.model : null } };
 }

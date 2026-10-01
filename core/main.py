@@ -7,6 +7,7 @@ import sys
 
 from core.audit import AuditLog
 from core.settings import SecretStore
+from core.sysmon import SystemMonitor, llm_stats_from
 from core.env import load_dotenv
 from core.bus import EventBus
 from core.app import FROM_CONFIG, jarvis_home, wire, workspace_roots
@@ -31,6 +32,15 @@ async def run() -> None:
     # El token se entrega por stdout al lanzador del HUD; no se escribe en disco ni en logs.
     print(f"JARVIS_READY port={port} token={server.token}", flush=True)
     bus.publish("state.changed", {"state": "idle"})
+    monitor = SystemMonitor(handlers.components, lambda: llm_stats_from(handlers.config.holder), lambda: server.clients)
+
+    async def stats_loop() -> None:
+        while True:
+            await monitor.measure_lag()
+            if server.clients:                                  # sin HUD conectado no se muestrea nada
+                bus.publish("system.stats", monitor.sample())
+            await asyncio.sleep(1.9)
+    stats_task = asyncio.create_task(stats_loop())
     stop = asyncio.Event()
     for sig in (signal.SIGTERM, signal.SIGINT):
         try:
@@ -38,6 +48,7 @@ async def run() -> None:
         except (NotImplementedError, RuntimeError):
             pass                                                            # Windows: el Job Object del watchdog cubre este caso
     await stop.wait()
+    stats_task.cancel()
     audit.append("core.stopped")
     await handlers.cleanup()
     with contextlib.suppress(Exception):

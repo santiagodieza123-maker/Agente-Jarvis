@@ -23,6 +23,7 @@ class HudServer:
         self.on_message = on_message  # callable(dict) -> None | awaitable; mensajes JSON del HUD
         self.token = token or secrets.token_urlsafe(32)
         self.allowed_origins = frozenset(allowed_origins)
+        self.clients = 0                      # conexiones abiertas ahora mismo
         self.on_connect = on_connect          # se llama con cada conexión ya autenticada (p. ej. para auditarla)
         self.port = port
         self._server = None
@@ -43,6 +44,7 @@ class HudServer:
         if self.on_connect is not None:
             self.on_connect()
         q = self.bus.subscribe()
+        self.clients += 1
         try:
             async def pump():
                 while True:
@@ -59,6 +61,7 @@ class HudServer:
                         await res
             sender.cancel()
         finally:
+            self.clients -= 1
             self.bus.unsubscribe(q)
 
     async def start(self) -> int:

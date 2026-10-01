@@ -1,5 +1,5 @@
 import { MAX_ROWS, asAudit, mergeRecent, asRecord, asVerified, matches, type AuditRecord, type AuditSnapshot, type AuditVerified } from "./audit";
-import { asConfig, asExtensions, asFrame, asMemory, asPermissions, type ConfigSnapshot, type ExtensionsSnapshot, type Frame, type JarvisEvent, type MemorySnapshot, type PermissionsSnapshot } from "./events";
+import { asConfig, asExtensions, asFrame, asMemory, asStats, asPermissions, type ConfigSnapshot, type ExtensionsSnapshot, type Frame, type JarvisEvent, type Stats, type MemorySnapshot, type PermissionsSnapshot } from "./events";
 
 export type AgentState = "idle" | "thinking" | "acting" | "awaiting" | "error" | "killed";
 export type Conn = "connecting" | "open" | "closed";
@@ -23,6 +23,7 @@ export interface HudState {
   permissions: PermissionsSnapshot | null;
   config: ConfigSnapshot | null;
   extensions: ExtensionsSnapshot | null;
+  stats: Stats[];                 // últimas muestras del sistema (para los gráficos)
   frame: Frame | null;            // última captura que «ve» el agente
   notice: { level: string; text: string; id: number } | null;
   audit: AuditSnapshot | null;
@@ -30,7 +31,7 @@ export interface HudState {
   recent: AuditRecord[];          // últimos registros recibidos en vivo: cubren la carrera con una consulta en curso
 }
 
-export const initial: HudState = { conn: "connecting", agent: "idle", plan: "", timeline: [], approvals: [], chat: [], memory: null, permissions: null, config: null, extensions: null, frame: null, notice: null, audit: null, auditVerified: null, recent: [] };
+export const initial: HudState = { conn: "connecting", agent: "idle", plan: "", timeline: [], approvals: [], chat: [], memory: null, permissions: null, config: null, extensions: null, frame: null, stats: [], notice: null, audit: null, auditVerified: null, recent: [] };
 
 export type Action =
   | { kind: "conn"; conn: Conn }
@@ -39,6 +40,7 @@ export type Action =
   | { kind: "clear_notice"; id: number };
 
 const MAX_TIMELINE = 200;
+const MAX_STATS = 60;
 let seq = 0;
 
 export function reduce(s: HudState, a: Action): HudState {
@@ -83,6 +85,10 @@ export function reduce(s: HudState, a: Action): HudState {
       return { ...s, permissions: asPermissions(p) ?? s.permissions };
     case "config.changed":
       return { ...s, config: asConfig(p) ?? s.config };
+    case "system.stats": {
+      const st = asStats(p);
+      return st ? { ...s, stats: [...s.stats, st].slice(-MAX_STATS) } : s;
+    }
     case "perception.frame":
       return { ...s, frame: asFrame(p) ?? s.frame };
     case "extensions.changed":

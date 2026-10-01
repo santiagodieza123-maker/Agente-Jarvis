@@ -1,6 +1,9 @@
 """Proveedor intercambiable en caliente: el orquestador conserva una referencia estable mientras el HUD cambia modelo o clave."""
 from __future__ import annotations
 
+import time
+from collections import deque
+
 from core.llm.provider import LLMProvider, LLMResponse
 
 
@@ -12,6 +15,8 @@ class LLMHolder(LLMProvider):
     def __init__(self, inner: LLMProvider | None = None, store=None):
         self.inner = inner
         self.store = store                                          # UsageStore opcional: consumo persistente
+        self.latencies: deque = deque(maxlen=50)                    # ms de las últimas llamadas
+        self.errors = 0
         self.on_wait = None                                         # aviso (segundos, motivo) mientras el proveedor espera
         self.calls = self.input_tokens = self.output_tokens = 0     # consumo de la sesión
 
@@ -21,7 +26,13 @@ class LLMHolder(LLMProvider):
             raise NoLLM("sin clave de API configurada")
         if hasattr(inner, "on_wait"):
             inner.on_wait = self.on_wait
-        r = inner.generate(system, messages, tools, image_png)
+        t0 = time.perf_counter()
+        try:
+            r = inner.generate(system, messages, tools, image_png)
+        except Exception:
+            self.errors += 1
+            raise
+        self.latencies.append((time.perf_counter() - t0) * 1000)
         self.calls += 1
         self.input_tokens += r.input_tokens
         self.output_tokens += r.output_tokens

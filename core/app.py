@@ -107,6 +107,23 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
                         external_context=lambda: cfg.values["confirm_with_extensions"] and any(
                             n.startswith("mcp.") and n not in perms.disabled for n in tools))
 
+    def components() -> list[dict]:
+        """Salud de cada pieza para el panel SISTEMA."""
+        import psutil
+        comps = [{"name": "núcleo", "state": "ok", "detail": f"pid {os.getpid()}"},
+                 {"name": "modelo", "state": "ok" if holder.inner is not None else "sin clave", "detail": getattr(holder.inner, "model", "")},
+                 {"name": "navegador", "state": "ok" if web._page is not None else "inactivo", "detail": "perfil propio · proxy de salida"},
+                 {"name": "UI Automation", "state": "ok" if gui is not None else "no disponible", "detail": "" if gui is not None else "solo en Windows con uiautomation"}]
+        try:
+            parent = psutil.Process(os.getpid()).parent()
+            under = parent is not None and any("watchdog" in a for a in parent.cmdline())
+        except psutil.Error:
+            under = False
+        comps.append({"name": "watchdog", "state": "ok" if under else "aviso", "detail": "Ctrl+Shift+F10 activo" if under else "el núcleo corre sin watchdog"})
+        comps += [{"name": f"mcp:{e.name}", "state": {"running": "ok", "starting": "arrancando", "stopped": "inactivo"}.get(e.state, e.state), "detail": e.error[:80]}
+                  for e in manager.exts.values()]
+        return comps
+    handlers.components = components
     handlers.extra.append(RecipeHandlers(bus, audit, memory, orch, handlers, tools, lambda n: n not in perms.disabled,
                                          policy._path_allowed, settings.publish_memory))
 

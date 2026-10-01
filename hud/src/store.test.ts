@@ -128,3 +128,22 @@ describe("perception.frame", () => {
     expect(apply(ev("perception.frame", frame), ev("kill.triggered")).frame).toBeNull();
   });
 });
+
+describe("system.stats", () => {
+  const stat = (n: number) => ({ ts: n, uptime: 10, threads: 4, loop_lag_ms: 1.5, clients: 1, cpu: { process: n, system: 20, cores: 8 }, memory: { rss: 1e8, system_percent: 40, system_total: 1e10 },
+    gpu: null, children: [{ pid: 5, name: "x", cpu: 1, rss: 1 }, { pid: "mal" }], llm: { calls: 2, errors: 0, last_ms: 300, avg_ms: 250, p95_ms: 400, ready: true, model: "m" },
+    components: [{ name: "núcleo", state: "ok", detail: "" }, { nombre: 1 }] });
+  it("acumula muestras (máx. 60) y filtra elementos malformados", () => {
+    const s = apply(...Array.from({ length: 75 }, (_, i) => ev("system.stats", stat(i))));
+    expect(s.stats).toHaveLength(60); expect(s.stats[59].cpu.process).toBe(74);
+    expect(s.stats[0].children).toHaveLength(1); expect(s.stats[0].components).toHaveLength(1);
+  });
+  it("ignora muestras inválidas", () => {
+    const s = apply(ev("system.stats", stat(1)), ev("system.stats", { ...stat(2), cpu: "x" }), ev("system.stats", { ...stat(3), llm: { calls: "no" } }), ev("system.stats", {}));
+    expect(s.stats).toHaveLength(1);
+  });
+  it("acepta GPU y latencias nulas", () => {
+    const s = apply(ev("system.stats", { ...stat(1), gpu: { name: "RTX", util: 5, mem_used: 1, mem_total: 2 }, llm: { calls: 0, errors: 0, last_ms: null, avg_ms: null, p95_ms: null, ready: false, model: null } }));
+    expect(s.stats[0].gpu?.name).toBe("RTX"); expect(s.stats[0].llm.last_ms).toBeNull();
+  });
+});
