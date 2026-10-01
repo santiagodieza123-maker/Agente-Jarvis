@@ -27,6 +27,8 @@ jobs:
       - name: Escaneo de secretos
         run: python tools/scan_secrets.py
       - name: pytest
+        env:
+          JARVIS_NET_TESTS: "1"
         run: python -m pytest -q -p no:cacheprovider
       - name: HUD (tipos, pruebas, build)
         working-directory: hud

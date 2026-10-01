@@ -174,3 +174,46 @@ def test_legit_navigation_redirect_is_followed(tmp_path):
             await w.close()
     asyncio.run(go())
     srv.shutdown()
+
+
+# ---------- DNS rebinding con Chromium real ----------
+def test_dns_rebinding_between_check_and_connect_is_blocked_by_the_proxy(tmp_path):
+    """check_url ve una IP pública y el proxy, al conectar, ve 127.0.0.1: la conexión no debe salir."""
+    import socket as _s
+    hits = []
+
+    class Secret(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            hits.append(self.path); self.send_response(200); self.send_header("Content-Type", "text/html"); self.end_headers()
+            self.wfile.write(b"<h1>SECRETO INTERNO</h1>")
+        def log_message(self, *a): pass
+    secret = serve(Secret); sport = secret.server_address[1]
+    PUB = "93.184.216.34"
+    answers = {"rebind.test": iter([[PUB], [PUB], ["127.0.0.1"]]), "ok.test": None}
+    calls = []
+
+    async def resolver(host, port):
+        calls.append(host)
+        if host == "ok.test":
+            return [PUB]
+        return next(answers[host])
+
+    dialed = []
+
+    async def opener(ip, port):          # cualquier IP pública 'sale' a nuestro servidor local
+        dialed.append(ip)
+        return await asyncio.open_connection("127.0.0.1", sport)
+
+    async def go():
+        w = WebTools(tmp_path / "p", resolver=resolver, opener=opener)
+        try:
+            assert "SECRETO INTERNO" in await w.open(f"http://ok.test:{sport}/")           # camino legítimo: túnel funcionando
+            hits.clear(); dialed.clear()
+            with pytest.raises(BlockedURL):
+                await w.open(f"http://rebind.test:{sport}/")                                 # las dos comprobaciones previas ven IP pública y la conexión del proxy ve loopback
+            assert dialed == [] and hits == []
+            assert any("rebind.test" in b for b in w.blocked)
+        finally:
+            await w.close()
+    asyncio.run(go())
+    secret.shutdown()

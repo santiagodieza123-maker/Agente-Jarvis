@@ -1,12 +1,15 @@
-"""Navegador headless-first (Playwright) con perfil dedicado y bloqueo de destinos internos (anti-SSRF)."""
+"""Navegador headless-first (Playwright) con perfil dedicado y bloqueo de destinos internos (anti-SSRF).
+Todo el tráfico del navegador pasa por `EgressProxy`, que valida la IP *en el momento de conectar* (sin ventana de DNS
+rebinding) y cubre redirecciones, subrecursos y WebSockets. `check_url` es solo una primera barrera con mensajes claros."""
 from __future__ import annotations
 
 import asyncio
 import ipaddress
-import socket
+from contextlib import suppress
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urlsplit
 
+from core.egress_proxy import BLOCKED_HEADER, EgressProxy, default_opener, default_resolver, is_public
 from core.orchestrator import Tool
 from core.policy import ActionClass
 
@@ -22,15 +25,26 @@ class BlockedURL(Exception):
     pass
 
 
+def _is_ip(host: str) -> bool:
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        return False
+
+
 class WebTools:
     def __init__(self, profile_dir: str | Path, headless: bool = True,
-                 allowed_private: frozenset[str] = frozenset()):
-        """`allowed_private`: 'host:puerto' que se permiten aunque sean privados (solo para pruebas)."""
+                 allowed_private: frozenset[str] = frozenset(), resolver=None, opener=None):
+        """`allowed_private`: 'host:puerto' que se permiten aunque sean privados (solo para pruebas).
+        `resolver` / `opener`: sustituyen al DNS y a la conexión del proxy (pruebas de rebinding)."""
+        self._resolver, self._opener = resolver or default_resolver, opener or default_opener
         self.profile_dir, self.headless, self.allowed_private = Path(profile_dir), headless, allowed_private
         self._pw = self._ctx = self._page = None
         self._lock = asyncio.Lock()
-        self._dns: dict[str, bool] = {}
-        self._redirect: str | None = None
+        self._proxy: EgressProxy | None = None
+        self.blocked_recently = False
+        self.blocked: list[str] = []            # destinos rechazados por el proxy (últimos 50)
 
     # --- política de destinos ---
     async def check_url(self, url: str) -> None:
@@ -42,79 +56,56 @@ class WebTools:
         if f"{u.hostname}:{u.port or (443 if u.scheme == 'https' else 80)}" in self.allowed_private:
             return
         host = u.hostname
-        if host not in self._dns:
-            try:
-                infos = await asyncio.to_thread(socket.getaddrinfo, host, None)
-                self._dns[host] = all(ipaddress.ip_address(i[4][0]).is_global for i in infos)
-            except (socket.gaierror, ValueError):
-                self._dns[host] = False
-        if not self._dns[host]:
+        try:
+            ips = [host] if _is_ip(host) else await self._resolver(host, u.port or (443 if u.scheme == "https" else 80))
+            ok = bool(ips) and all(is_public(ip) for ip in ips)
+        except (OSError, ValueError):
+            ok = False
+        if not ok:
             raise BlockedURL(f"destino interno o irresoluble bloqueado: {host}")
 
     async def _route(self, route) -> None:
-        """Cada petición y cada salto de redirección se valida antes de salir.
-        Tras entregar una respuesta, el navegador sigue las redirecciones SIN volver a interceptarlas, así que:
-          - navegación del frame principal: se aborta y `_goto` vuelve a navegar al destino (pasa de nuevo por aquí);
-          - subrecursos e iframes: se siguen aquí dentro, validando cada `Location`, y se entrega la respuesta final.
-        Limitación conocida: DNS rebinding entre la comprobación y la conexión (TOCTOU) no queda cubierto."""
-        req = route.request
-        url = req.url
+        """Primera barrera (esquema y resolución previa). La barrera real es el proxy de salida, que valida cada conexión,
+        incluidas las de redirecciones y subrecursos, contra la IP a la que realmente se conecta."""
         try:
-            await self.check_url(url)
+            await self.check_url(route.request.url)
         except BlockedURL:
             return await route.abort("blockedbyclient")
-        if urlsplit(url).scheme not in ("http", "https"):
-            return await route.continue_()
-        try:
-            main_nav = req.is_navigation_request() and req.frame.parent_frame is None
-        except Exception:
-            main_nav = False
-        try:
-            resp = await route.fetch(max_redirects=0)
-            for _ in range(10):
-                loc = resp.headers.get("location")
-                if not (300 <= resp.status < 400 and loc):
-                    return await route.fulfill(response=resp)
-                url = urljoin(url, loc)
-                await self.check_url(url)              # BlockedURL si el siguiente salto es interno
-                if main_nav:
-                    self._redirect = url
-                    return await route.abort("aborted")
-                resp = await route.fetch(url=url, max_redirects=0)
-            return await route.abort("failed")          # demasiadas redirecciones
-        except BlockedURL:
-            return await route.abort("blockedbyclient")
-        except Exception:
-            return await route.abort("failed")
+        await route.continue_()
+
+    def _on_block(self, host: str, reason: str) -> None:
+        self.blocked = (self.blocked + [f"{host}: {reason}"])[-50:]
+        self.blocked_recently = True
 
     async def _goto(self, url: str) -> None:
         p = await self._page_()
-        for _ in range(10):
-            self._redirect = None
-            try:
-                await p.goto(url, timeout=20_000, wait_until="domcontentloaded")
-            except Exception:
-                if self._redirect is None:
-                    raise
-            if self._redirect is None:
-                return
-            url = self._redirect
-        raise BlockedURL("demasiadas redirecciones")
+        resp = await p.goto(url, timeout=20_000, wait_until="domcontentloaded")
+        if resp is not None and resp.headers.get(BLOCKED_HEADER.lower()):
+            raise BlockedURL(f"destino interno bloqueado tras redirección o resolución: {(await resp.text())[:120]}")
 
     async def _settle(self) -> None:
-        """Completa una redirección de navegación pendiente tras un clic/envío."""
+        """Tras un clic/envío, espera a que termine la navegación que haya provocado y comprueba que no fue bloqueada."""
         await asyncio.sleep(0.3)
-        if self._redirect:
-            await self._goto(self._redirect)
+        p = await self._page_()
+        with suppress(Exception):
+            await p.wait_for_load_state("domcontentloaded", timeout=5000)
+        if self.blocked_recently:
+            self.blocked_recently = False
+            raise BlockedURL("la navegación fue bloqueada por el proxy de salida (destino interno)")
 
     # --- ciclo de vida ---
     async def _page_(self):
         async with self._lock:
             if self._page is None:
                 from playwright.async_api import async_playwright
+                self._proxy = EgressProxy(self.allowed_private, resolver=self._resolver, opener=self._opener, on_block=self._on_block)
+                port = await self._proxy.start()
                 self._pw = await async_playwright().start()
                 self._ctx = await self._pw.chromium.launch_persistent_context(
-                    str(self.profile_dir), headless=self.headless, accept_downloads=False)
+                    str(self.profile_dir), headless=self.headless, accept_downloads=False,
+                    args=[f"--proxy-server=http://127.0.0.1:{port}",
+                          "--proxy-bypass-list=<-loopback>",                       # localhost también pasa (y se bloquea) en el proxy
+                          "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"])
                 await self._ctx.route("**/*", self._route)
                 self._page = self._ctx.pages[0] if self._ctx.pages else await self._ctx.new_page()
         return self._page
@@ -124,7 +115,9 @@ class WebTools:
             await self._ctx.close()
         if self._pw:
             await self._pw.stop()
-        self._pw = self._ctx = self._page = None
+        if self._proxy:
+            await self._proxy.stop()
+        self._pw = self._ctx = self._page = self._proxy = None
 
     # --- herramientas ---
     async def _snapshot(self) -> str:
@@ -151,7 +144,7 @@ class WebTools:
 
     async def click(self, target: str) -> str:
         el = await self._find(target)
-        self._redirect = None
+        self.blocked_recently = False
         await el.click(timeout=5000)
         await self._settle()
         return await self._snapshot()
@@ -160,7 +153,7 @@ class WebTools:
         el = await self._find(target)
         await el.fill(text, timeout=5000)
         if submit:
-            self._redirect = None
+            self.blocked_recently = False
             await el.press("Enter")
             await self._settle()
         return await self._snapshot()
