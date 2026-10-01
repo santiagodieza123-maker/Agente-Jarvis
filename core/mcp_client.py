@@ -110,15 +110,25 @@ def tool_name(ext: str, raw, taken: set[str]) -> str | None:
     return name
 
 
+def _attr(obj, *names):
+    """mcp 1.x usa camelCase (inputSchema, isError) y 2.x snake_case (input_schema, is_error)."""
+    for n in names:
+        v = getattr(obj, n, None)
+        if v is not None:
+            return v
+    return None
+
+
 def render_result(res) -> str:
     parts = []
     for c in getattr(res, "content", None) or []:
         text = getattr(c, "text", None)
         parts.append(text if isinstance(text, str) else f"[contenido {getattr(c, 'type', '?')} omitido]")
-    if not parts and getattr(res, "structuredContent", None) is not None:
-        parts.append(json.dumps(res.structuredContent, ensure_ascii=False, default=str))
+    structured = _attr(res, "structuredContent", "structured_content")
+    if not parts and structured is not None:
+        parts.append(json.dumps(structured, ensure_ascii=False, default=str))
     text = "\n".join(parts) or "(sin contenido)"
-    if getattr(res, "isError", False):
+    if _attr(res, "isError", "is_error"):
         text = "[la herramienta devolvió un error] " + text      # sigue siendo salida no confiable, no una excepción
     return text if len(text) <= MAX_OUTPUT else text[:MAX_OUTPUT] + f"\n[recortado: {len(text)} caracteres]"
 
@@ -308,7 +318,7 @@ class ExtensionManager:
             ext.tools[full] = raw
             self.tools[full] = Tool(full, ActionClass.READ if raw in ext.trusted else ActionClass.DESTRUCTIVE,
                                     self._runner(ext, raw), desc[:200], untrusted_output=True,
-                                    parameters=tool_schema(getattr(t, "inputSchema", None)))
+                                    parameters=tool_schema(_attr(t, "inputSchema", "input_schema")))
 
     def _unregister(self, ext: Extension) -> None:
         for full in ext.tools:

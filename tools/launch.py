@@ -5,13 +5,15 @@
     python tools/launch.py --browser        # desarrollo: imprime/abre la URL del servidor de Vite
     python tools/launch.py --no-watchdog    # sin watchdog (Linux/macOS o depuración)
 
-El puerto y el token llegan al HUD por variables de entorno del proceso hijo, nunca por argv.
+El puerto y el token llegan al HUD por su entrada estándar (una línea JSON y se cierra): no quedan en argv ni en
+el entorno del proceso, donde cualquier proceso del mismo usuario podría leerlos.
 Al cerrar el HUD (o con Ctrl+C) se detiene el núcleo; en Windows el Job Object del watchdog
 mata además a todos sus procesos hijos.
 """
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import queue
 import re
@@ -19,6 +21,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 from pathlib import Path
 
@@ -106,10 +109,18 @@ def find_hud(explicit: str | None) -> list[str] | None:
     return [str(built)] if built.is_file() else None
 
 
-def hud_env(port: int, token: str) -> dict[str, str]:
-    env = {k: v for k, v in os.environ.items() if k not in SECRET_ENV}
-    env.update(JARVIS_PORT=str(port), JARVIS_TOKEN=token)
-    return env
+def hud_env() -> dict[str, str]:
+    """Entorno del HUD: sin la clave de Gemini y sin restos de una conexión anterior."""
+    return {k: v for k, v in os.environ.items() if k not in SECRET_ENV and k not in ("JARVIS_PORT", "JARVIS_TOKEN")}
+
+
+def send_connection(hud: subprocess.Popen, port: int, token: str) -> None:
+    try:
+        assert hud.stdin is not None
+        hud.stdin.write(json.dumps({"port": port, "token": token}) + "\n")
+        hud.stdin.close()
+    except (BrokenPipeError, OSError):
+        pass                                  # el HUD ya terminó; wait() devolverá su código
 
 
 def run(argv: list[str] | None = None) -> int:
@@ -117,6 +128,7 @@ def run(argv: list[str] | None = None) -> int:
     ap.add_argument("--hud", help="binario del HUD (por defecto: JARVIS_HUD_BIN o el build de Tauri)")
     ap.add_argument("--browser", action="store_true", help="modo desarrollo: usa el servidor de Vite en el navegador")
     ap.add_argument("--no-watchdog", action="store_true", help="no usar el watchdog (siempre implícito fuera de Windows)")
+    ap.add_argument("--stop-file", help="(pruebas) al aparecer este archivo, el lanzador cierra el HUD y el núcleo")
     ap.add_argument("--timeout", type=float, default=30.0, help="segundos de espera al arranque del núcleo")
     args = ap.parse_args(argv)
 
@@ -140,7 +152,12 @@ def run(argv: list[str] | None = None) -> int:
             webbrowser.open(url)
             core.wait()
             return 0
-        hud = subprocess.Popen(hud_cmd, env=hud_env(port, token))
+        hud = subprocess.Popen(hud_cmd, env=hud_env(), stdin=subprocess.PIPE, text=True)
+        send_connection(hud, port, token)
+        if args.stop_file:
+            while hud.poll() is None and not Path(args.stop_file).exists():
+                time.sleep(0.2)
+            return 0 if hud.poll() is None else hud.returncode
         return hud.wait()  # si el núcleo cae (pánico) el HUD sigue abierto mostrando KILLED
     except FileNotFoundError:
         print(f"Error: no se pudo ejecutar el HUD: {hud_cmd[0]}", file=sys.stderr)

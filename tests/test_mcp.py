@@ -92,6 +92,9 @@ def test_render_result():
     big = M.render_result(NS(content=[NS(type="text", text="x" * 50000)], isError=False))
     assert len(big) < M.MAX_OUTPUT + 100 and "recortado" in big
     assert M.render_result(NS(content=[], isError=False, structuredContent={"a": 1})) == '{"a": 1}'
+    # mcp 2.x (snake_case)
+    assert M.render_result(NS(content=[], is_error=False, structured_content={"a": 1})) == '{"a": 1}'
+    assert M.render_result(NS(content=[NS(type="text", text="mal")], is_error=True)).startswith("[la herramienta devolvió un error]")
 
 
 # ---------- integración con un servidor MCP real ----------

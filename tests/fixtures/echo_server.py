@@ -3,7 +3,10 @@ import os
 import sys
 import time
 
-from mcp.server.fastmcp import FastMCP
+try:                                    # mcp 1.x
+    from mcp.server.fastmcp import FastMCP
+except ImportError:                     # mcp 2.x renombró FastMCP a MCPServer
+    from mcp.server.mcpserver import MCPServer as FastMCP
 
 if len(sys.argv) > 1:
     open(sys.argv[1], "w").write(str(os.getpid()))

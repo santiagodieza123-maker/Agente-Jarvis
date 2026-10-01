@@ -17,7 +17,8 @@ async def run() -> None:
     bus = EventBus()
     audit = AuditLog(jarvis_home() / "audit.jsonl")
     handlers = wire(FROM_CONFIG, bus, audit, workspace_roots())
-    server = HudServer(bus, port=int(os.environ.get("JARVIS_CORE_PORT", "8765")), on_message=handlers)
+    server = HudServer(bus, port=int(os.environ.get("JARVIS_CORE_PORT", "8765")), on_message=handlers,
+                       on_connect=lambda: audit.append("hud.connected"))
     port = await server.start()
     audit.append("core.started", port=port)
     handlers.extensions.start_enabled()     # las extensiones activadas arrancan en segundo plano

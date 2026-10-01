@@ -1,5 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::io::{BufRead, IsTerminal};
+use std::sync::mpsc;
+use std::time::Duration;
 use tauri::{WebviewUrl, WebviewWindowBuilder};
 
 /// Script que expone al HUD el puerto y el token que el lanzador entregó por entorno.
@@ -14,13 +17,38 @@ fn connection_script(port: Option<String>, token: Option<String>) -> String {
     }
 }
 
+/// Interpreta la línea JSON `{"port": N, "token": "…"}` que entrega el lanzador por la entrada estándar.
+fn parse_connection(line: &str) -> Option<(String, String)> {
+    let v: serde_json::Value = serde_json::from_str(line.trim()).ok()?;
+    let port = v.get("port")?.as_u64().filter(|p| (1..=65535).contains(p))?;
+    let token = v.get("token")?.as_str().filter(|t| !t.is_empty() && t.len() <= 256)?;
+    Some((port.to_string(), token.to_string()))
+}
+
+/// El token llega por stdin (no por entorno ni argv, que otros procesos del usuario pueden leer).
+/// Sin tubería (terminal interactiva) no se espera nada; con tubería se espera hasta 5 s.
+fn connection_from_stdin() -> Option<(String, String)> {
+    if std::io::stdin().is_terminal() {
+        return None;
+    }
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut line = String::new();
+        let _ = std::io::stdin().lock().read_line(&mut line);
+        let _ = tx.send(line);
+    });
+    parse_connection(&rx.recv_timeout(Duration::from_secs(5)).ok()?)
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
-            let script = connection_script(
-                std::env::var("JARVIS_PORT").ok(),
-                std::env::var("JARVIS_TOKEN").ok(),
-            );
+            // Prioridad: stdin (lanzador); como alternativa manual, las variables JARVIS_PORT / JARVIS_TOKEN.
+            let (port, token) = match connection_from_stdin() {
+                Some((p, t)) => (Some(p), Some(t)),
+                None => (std::env::var("JARVIS_PORT").ok(), std::env::var("JARVIS_TOKEN").ok()),
+            };
+            let script = connection_script(port, token);
             WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
                 .title("Jarvis")
                 .inner_size(1100.0, 700.0)
@@ -38,7 +66,18 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::connection_script;
+    use super::{connection_script, parse_connection};
+
+    #[test]
+    fn parsea_la_linea_de_stdin() {
+        assert_eq!(parse_connection("{\"port\": 8765, \"token\": \"abc\"}\n"), Some(("8765".into(), "abc".into())));
+        for bad in ["", "no json", "{}", "{\"port\": 0, \"token\": \"a\"}", "{\"port\": 70000, \"token\": \"a\"}",
+                    "{\"port\": \"80\", \"token\": \"a\"}", "{\"port\": 80, \"token\": \"\"}", "{\"port\": 80, \"token\": 5}"] {
+            assert_eq!(parse_connection(bad), None, "{bad}");
+        }
+        let largo = format!("{{\"port\": 80, \"token\": \"{}\"}}", "x".repeat(300));
+        assert_eq!(parse_connection(&largo), None);
+    }
 
     #[test]
     fn sin_variables_no_define_nada() {

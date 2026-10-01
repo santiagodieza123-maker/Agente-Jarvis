@@ -27,8 +27,9 @@ time.sleep(60)
 
 FAKE_HUD = """
 import json, os, sys
-json.dump({"argv": sys.argv[1:], "port": os.environ.get("JARVIS_PORT"), "token": os.environ.get("JARVIS_TOKEN"),
-           "gemini": os.environ.get("GEMINI_API_KEY")}, open(sys.argv[1], "w"))
+conn = json.loads(sys.stdin.readline())
+json.dump({"argv": sys.argv[1:], "stdin": conn, "env_port": os.environ.get("JARVIS_PORT"), "env_token": os.environ.get("JARVIS_TOKEN"),
+           "gemini": os.environ.get("GEMINI_API_KEY"), "eof": sys.stdin.read() == ""}, open(sys.argv[1], "w"))
 """
 
 
@@ -63,10 +64,12 @@ def test_ready_regex_requires_whole_line():
     assert not L.READY.match("JARVIS_READY port=x token=a")
 
 
-def test_hud_env_strips_api_key_and_sets_connection(monkeypatch):
+def test_hud_env_strips_api_key_and_stale_connection(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "k")
-    env = L.hud_env(1, "t")
-    assert "GEMINI_API_KEY" not in env and env["JARVIS_PORT"] == "1" and env["JARVIS_TOKEN"] == "t"
+    monkeypatch.setenv("JARVIS_TOKEN", "viejo")
+    monkeypatch.setenv("JARVIS_PORT", "1")
+    env = L.hud_env()
+    assert "GEMINI_API_KEY" not in env and "JARVIS_PORT" not in env and "JARVIS_TOKEN" not in env
 
 
 def test_find_hud_priority(tmp_path, monkeypatch):
@@ -97,7 +100,7 @@ def test_start_core_times_out_and_kills(tmp_path):
 
 
 @posix
-def test_run_passes_connection_by_env_not_argv_and_cleans_up(tmp_path, monkeypatch, capfd):
+def test_run_passes_connection_by_stdin_not_env_nor_argv_and_cleans_up(tmp_path, monkeypatch, capfd):
     pids, out = tmp_path / "pids", tmp_path / "hud.json"
     hud = tmp_path / "hud.py"
     hud.write_text(FAKE_HUD)
@@ -109,7 +112,8 @@ def test_run_passes_connection_by_env_not_argv_and_cleans_up(tmp_path, monkeypat
     rc = L.run(["--timeout", "20", "--hud", str(wrapper)])
     got = json.loads(out.read_text())
     assert rc == 0
-    assert got == {"argv": [str(out)], "port": "4321", "token": "tok-secreto_123", "gemini": None}
+    assert got == {"argv": [str(out)], "stdin": {"port": 4321, "token": "tok-secreto_123"},
+                   "env_port": None, "env_token": None, "gemini": None, "eof": True}
     core_pid, child_pid = map(int, pids.read_text().split())
     assert wait_dead(core_pid) and wait_dead(child_pid)   # el núcleo y sus hijos mueren al cerrar el HUD
     err = capfd.readouterr().err

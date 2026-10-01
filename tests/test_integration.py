@@ -203,7 +203,7 @@ def test_locked_class_and_dangerous_root_rejected_over_websocket(tmp_path):
         assert "no se puede relajar" in n["payload"]["text"]
         snap = await pump_until(ws, events, lambda e: e["type"] == "permissions.changed")
         assert [c["confirm"] for c in snap["payload"]["classes"] if c["name"] == "destructive"] == [True]
-        await ws.send(json.dumps({"type": "permissions.add_root", "path": "/"}))
+        await ws.send(json.dumps({"type": "permissions.add_root", "path": os.path.abspath(os.sep)}))   # "/" en POSIX, "C:\\" en Windows
         await pump_until(ws, events, lambda e: e["type"] == "ui.notice" and "amplia" in e["payload"]["text"])
         await ws.send(json.dumps({"type": "permissions.set_confirm", "class": "write_reversible", "value": True}))
         snap = await pump_until(ws, events, lambda e: e["type"] == "permissions.changed" and

@@ -18,11 +18,12 @@ DEFAULT_ORIGINS = frozenset({"tauri://localhost", "http://tauri.localhost", "htt
 
 class HudServer:
     def __init__(self, bus: EventBus, token: str | None = None,
-                 allowed_origins=DEFAULT_ORIGINS, port: int = 0, on_message=None):
+                 allowed_origins=DEFAULT_ORIGINS, port: int = 0, on_message=None, on_connect=None):
         self.bus = bus
         self.on_message = on_message  # callable(dict) -> None | awaitable; mensajes JSON del HUD
         self.token = token or secrets.token_urlsafe(32)
         self.allowed_origins = frozenset(allowed_origins)
+        self.on_connect = on_connect          # se llama con cada conexión ya autenticada (p. ej. para auditarla)
         self.port = port
         self._server = None
 
@@ -39,6 +40,8 @@ class HudServer:
         return None
 
     async def _handler(self, ws) -> None:
+        if self.on_connect is not None:
+            self.on_connect()
         q = self.bus.subscribe()
         try:
             async def pump():
