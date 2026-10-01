@@ -68,6 +68,8 @@ class Orchestrator:
     approver: Approver
     max_steps: int = 15
     max_failures: int = 3
+    is_enabled: Callable[[str], bool] = lambda name: True      # herramientas deshabilitadas desde el HUD
+    memory_block: Callable[[], str] = lambda: ""                # notas del usuario para el prompt
     _graph: Any = field(init=False, repr=False, default=None)
 
     def __post_init__(self):
@@ -95,7 +97,8 @@ class Orchestrator:
         if s["steps"] >= self.max_steps:
             self.audit.append("task.aborted", reason="max_steps")
             return {"status": "aborted", "answer": "Límite de pasos alcanzado."}
-        r = await asyncio.to_thread(self.llm.generate, SYSTEM, s["messages"], [t.schema() for t in self.tools.values()])
+        schemas = [t.schema() for t in self.tools.values() if self.is_enabled(t.name)]
+        r = await asyncio.to_thread(self.llm.generate, SYSTEM + self.memory_block(), s["messages"], schemas)
         self.bus.publish("plan.updated", {"text": r.text, "next": r.tool_calls[0].name if r.tool_calls else None})
         if not r.tool_calls:
             return {"status": "done", "answer": r.text}
@@ -112,6 +115,10 @@ class Orchestrator:
         call = s["pending"]
         tool = self.tools.get(call.name)
         steps = s["steps"] + 1
+        if tool is not None and not self.is_enabled(tool.name):
+            self.audit.append("action.rejected", tool=call.name, reason="disabled")
+            return {"steps": steps, "pending": None, "failures": s["failures"] + 1,
+                    "messages": self._record(s, f"herramienta deshabilitada por el usuario: {call.name}")}
         if tool is None:
             self.audit.append("action.rejected", tool=call.name, reason="unknown_tool")
             return {"steps": steps, "pending": None, "failures": s["failures"] + 1,

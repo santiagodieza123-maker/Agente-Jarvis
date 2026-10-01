@@ -17,9 +17,13 @@ class HudHandlers:
         self.bus, self.audit, self.exit_fn, self.run_task = bus, audit, exit_fn, run_task
         self._pending: dict[str, asyncio.Future] = {}
         self._task: asyncio.Task | None = None
+        self.extra: list[Callable[[dict], Awaitable[bool]]] = []   # manejadores adicionales (memoria, permisos)
         self.panic_hooks: list[Callable[[], object]] = []   # limpieza antes de salir: matar hijos (shell, navegador)
 
     async def __call__(self, msg: dict) -> None:
+        for h in self.extra:
+            if await h(msg):
+                return
         kind = msg.get("type")
         if kind == "panic":
             await self.panic()

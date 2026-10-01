@@ -7,6 +7,9 @@ from pathlib import Path
 from core.audit import AuditLog
 from core.bus import EventBus
 from core.hud_handlers import HudHandlers
+from core.hud_settings import SettingsHandlers
+from core.memory import Memory
+from core.permissions import REPO, PermissionStore
 from core.llm.provider import LLMProvider
 from core.orchestrator import Orchestrator
 from core.policy import Policy
@@ -24,28 +27,42 @@ def workspace_roots() -> list[Path]:
     return roots
 
 
+def jarvis_home() -> Path:
+    """Configuración persistente (permisos, memoria, perfil del navegador). Sobreescribible con JARVIS_HOME."""
+    return Path(os.environ.get("JARVIS_HOME", str(Path.home() / ".jarvis")))
+
+
 def wire(llm: LLMProvider | None, bus: EventBus, audit: AuditLog, roots: list[Path],
-         exit_fn=os._exit, approval_timeout: float = 120.0) -> HudHandlers:
+         exit_fn=os._exit, approval_timeout: float = 120.0, home: Path | None = None) -> HudHandlers:
+    home = home or jarvis_home()
     handlers = HudHandlers(bus, audit, exit_fn=exit_fn)
-    if llm is None:
-        return handlers
     fs = FsTools(roots)
     shell = ShellTools(roots[0])
-    web = WebTools(os.environ.get("JARVIS_BROWSER_PROFILE", str(Path.home() / ".jarvis" / "browser-profile")),
+    web = WebTools(os.environ.get("JARVIS_BROWSER_PROFILE", str(home / "browser-profile")),
                    headless=os.environ.get("JARVIS_BROWSER_HEADED") != "1")   # perfil dedicado, nunca el del usuario
     tools = {t.name: t for t in (*fs.tools(), *shell.tools(), *web.tools())}
+    policy = Policy(allowed_roots=[str(r.resolve()) for r in roots])
+    memory = Memory(home / "memory.db")
+    perms = PermissionStore(home / "permissions.json", policy, fs, roots, tools, protected=[REPO, home])
+    settings = SettingsHandlers(bus, audit, memory, perms)
+    handlers.extra.append(settings)
+    handlers.panic_hooks = [shell.kill_all, web.close]
+    handlers.memory, handlers.perms, handlers.settings = memory, perms, settings
+    if llm is None:
+        return handlers
 
     async def approver(approval_id, action, args) -> bool:
         return await handlers.request(approval_id, approval_timeout)
 
-    orch = Orchestrator(llm, tools, Policy(allowed_roots=[str(r.resolve()) for r in roots]),
-                        audit, bus, approver)
+    orch = Orchestrator(llm, tools, policy, audit, bus, approver,
+                        is_enabled=lambda n: n not in perms.disabled, memory_block=memory.prompt_block)
 
     async def run_task(goal: str) -> None:
-        await orch.run(goal)
+        final = await orch.run(goal)
+        memory.record_episode(goal, final["status"], final["steps"], final["answer"])
+        settings.publish_memory()
 
     handlers.run_task = run_task
-    handlers.panic_hooks = [shell.kill_all, web.close]
     return handlers
 
 

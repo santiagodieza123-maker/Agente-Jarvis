@@ -30,7 +30,7 @@ async def session(tmp_path, llm, hud_script, approval_timeout=5.0):
     """hud_script(ws, events) corre como 'usuario'. Devuelve (eventos, handlers)."""
     root = tmp_path / "ws"; root.mkdir(exist_ok=True)
     bus, audit = EventBus(), AuditLog(tmp_path / "a.jsonl")
-    h = wire(llm, bus, audit, [root], exit_fn=lambda c: None, approval_timeout=approval_timeout)
+    h = wire(llm, bus, audit, [root], exit_fn=lambda c: None, approval_timeout=approval_timeout, home=tmp_path / "home")
     srv = HudServer(bus, on_message=h)
     port = await srv.start()
     events = []
@@ -173,3 +173,86 @@ def test_tool_schemas_exposed_to_llm(tmp_path):
 
     asyncio.run(session(tmp_path, Spy(LLMResponse(text="ok")), hud))
     assert {"fs.read", "fs.delete", "shell.exec", "web.open", "web.click", "web.type", "web.read"} <= seen["names"]
+
+
+def _of(events, type_):
+    return [e for e in events if e["type"] == type_]
+
+
+def test_memory_roundtrip_over_websocket(tmp_path):
+    async def hud(ws, events):
+        await ws.send(json.dumps({"type": "memory.add", "kind": "preferencia", "content": "Responde en español"}))
+        ev = await pump_until(ws, events, lambda e: e["type"] == "memory.changed")
+        assert [n["content"] for n in ev["payload"]["notes"]] == ["Responde en español"]
+        nid = ev["payload"]["notes"][0]["id"]
+        await ws.send(json.dumps({"type": "memory.add", "kind": "receta", "content": "x"}))          # tipo inválido
+        await pump_until(ws, events, lambda e: e["type"] == "ui.notice" and e["payload"]["level"] == "error")
+        await ws.send(json.dumps({"type": "memory.update", "id": nid, "content": "Responde breve"}))
+        ev = await pump_until(ws, events, lambda e: e["type"] == "memory.changed" and e["payload"]["notes"][0]["content"] == "Responde breve")
+        await ws.send(json.dumps({"type": "memory.delete", "id": nid}))
+        await pump_until(ws, events, lambda e: e["type"] == "memory.changed" and e["payload"]["notes"] == [])
+
+    events, audit = asyncio.run(session(tmp_path, Scripted(), hud))
+    assert audit.verify() and {"memory.add", "memory.update", "memory.delete"} <= {json.loads(l)["event"] for l in (tmp_path / "a.jsonl").read_text().splitlines()}
+
+
+def test_locked_class_and_dangerous_root_rejected_over_websocket(tmp_path):
+    async def hud(ws, events):
+        await ws.send(json.dumps({"type": "permissions.set_confirm", "class": "destructive", "value": False}))
+        n = await pump_until(ws, events, lambda e: e["type"] == "ui.notice")
+        assert "no se puede relajar" in n["payload"]["text"]
+        snap = await pump_until(ws, events, lambda e: e["type"] == "permissions.changed")
+        assert [c["confirm"] for c in snap["payload"]["classes"] if c["name"] == "destructive"] == [True]
+        await ws.send(json.dumps({"type": "permissions.add_root", "path": "/"}))
+        await pump_until(ws, events, lambda e: e["type"] == "ui.notice" and "amplia" in e["payload"]["text"])
+        await ws.send(json.dumps({"type": "permissions.set_confirm", "class": "write_reversible", "value": True}))
+        snap = await pump_until(ws, events, lambda e: e["type"] == "permissions.changed" and
+                                any(c["name"] == "write_reversible" and c["confirm"] for c in e["payload"]["classes"]))
+        assert len(snap["payload"]["tools"]) >= 7
+
+    asyncio.run(session(tmp_path, Scripted(), hud))
+
+
+def test_disabled_tool_via_hud_is_not_offered_and_notes_reach_prompt(tmp_path):
+    class Spy(Scripted):
+        def generate(self, system, messages, tools, image_png=None):
+            self.offered = {t["name"] for t in tools}; self.system = system
+            return super().generate(system, messages, tools, image_png)
+
+    async def hud(ws, events):
+        await ws.send(json.dumps({"type": "permissions.set_tool", "tool": "shell.exec", "enabled": False}))
+        await pump_until(ws, events, lambda e: e["type"] == "permissions.changed")
+        await ws.send(json.dumps({"type": "memory.add", "kind": "dato", "content": "Mi color favorito es el azul"}))
+        await pump_until(ws, events, lambda e: e["type"] == "memory.changed")
+        await ws.send(json.dumps({"type": "task", "goal": "hola"}))
+        await pump_until(ws, events, lambda e: e["type"] == "state.changed" and e["payload"].get("state") == "idle")
+
+    llm = Spy(LLMResponse(text="hola"))
+    asyncio.run(session(tmp_path, llm, hud))
+    assert "shell.exec" not in llm.offered and "fs.read" in llm.offered
+    assert "Mi color favorito es el azul" in llm.system
+
+
+def test_finished_task_is_recorded_as_episode(tmp_path):
+    async def hud(ws, events):
+        await ws.send(json.dumps({"type": "task", "goal": "di hola"}))
+        ev = await pump_until(ws, events, lambda e: e["type"] == "memory.changed" and e["payload"]["episodes"])
+        ep = ev["payload"]["episodes"][0]
+        assert ep["goal"] == "di hola" and ep["status"] == "done" and ep["answer"] == "hola"
+        await ws.send(json.dumps({"type": "memory.clear_episodes"}))
+        await pump_until(ws, events, lambda e: e["type"] == "memory.changed" and e["payload"]["episodes"] == [])
+
+    asyncio.run(session(tmp_path, Scripted(LLMResponse(text="hola")), hud))
+
+
+def test_settings_work_without_llm_and_garbage_is_ignored(tmp_path):
+    async def hud(ws, events):
+        await ws.send(json.dumps({"type": "memory.add", "kind": "dato", "content": 5}))            # contenido no-string
+        await ws.send(json.dumps({"type": "permissions.bogus"}))                                   # tipo desconocido
+        await ws.send(json.dumps({"type": "memory.update", "id": "uno", "content": "x"}))
+        await ws.send(json.dumps({"type": "permissions.get"}))
+        # los mensajes se procesan en orden: la 2.ª instantánea de permisos (bogus + get) cierra el lote
+        await pump_until(ws, events, lambda e: e["type"] == "permissions.changed" and len(_of(events, "permissions.changed")) >= 2)
+
+    events, _ = asyncio.run(session(tmp_path, None, hud))        # sin LLM configurado
+    assert len(_of(events, "ui.notice")) >= 2

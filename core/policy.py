@@ -24,6 +24,10 @@ class Origin(str, Enum):
     OBSERVED = "observed"    # contenido leído de web/correo/PDF/pantalla: NO confiable
 
 
+# Estas clases SIEMPRE piden confirmación humana, por configuración que haya (defensa en profundidad).
+LOCKED_CLASSES = frozenset({ActionClass.DESTRUCTIVE, ActionClass.ELEVATED})
+
+
 @dataclass(frozen=True)
 class Action:
     tool: str
@@ -55,4 +59,4 @@ class Policy:
         # Contenido no confiable nunca origina acciones que modifican estado por sí solo.
         if a.origin is Origin.OBSERVED and a.cls is not ActionClass.READ:
             return Decision.CONFIRM if a.cls is not ActionClass.ELEVATED else Decision.DENY
-        return Decision.CONFIRM if self.confirm[a.cls] else Decision.ALLOW
+        return Decision.CONFIRM if (a.cls in LOCKED_CLASSES or self.confirm[a.cls]) else Decision.ALLOW

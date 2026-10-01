@@ -37,3 +37,11 @@ En una terminal **normal** (no elevada), desde la raíz del repo:
     python tools/verify_windows.py
 
 Tarda ~40 s y mueve el cursor: no toques mouse ni teclado. Genera `verify_report.txt` (y `.json`), sin claves ni variables de entorno.
+
+## Memoria y permisos (HUD)
+Pestañas MEMORIA y PERMISOS. Se guardan en `~/.jarvis` (`JARVIS_HOME`): `memory.db` (SQLite) y `permissions.json`.
+- **Memoria:** notas (preferencia/dato) que solo el usuario crea desde el HUD y que Jarvis recibe como contexto (no como órdenes); historial de tareas.
+  El agente no puede escribir memoria por su cuenta (evita envenenarla con contenido leído de la web).
+- **Permisos:** confirmación por clase (lectura y escritura reversible configurables; destructiva y elevada **siempre** piden confirmación),
+  herramientas activables y carpetas accesibles. Se rechazan carpetas demasiado amplias, del sistema, tu carpeta personal y la del repo/config
+  de Jarvis (contienen la clave y los permisos). Ninguna herramienta del agente puede modificar estos ajustes.

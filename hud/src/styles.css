@@ -1,13 +1,14 @@
 :root { --c: #2fb8ff; --bg: rgba(4, 14, 28, 0.78); font-family: "Segoe UI", system-ui, sans-serif; color: #cfeeff; }
 html, body, #root { margin: 0; height: 100%; background: transparent; overflow: hidden; }
-.hud { height: 100%; display: grid; grid-template: "h h" auto "o c" 1fr "o t" 1fr / 1.2fr 1fr; gap: 12px; padding: 12px; box-sizing: border-box; background: radial-gradient(circle at 30% 50%, #06213a, #020a14 70%); }
+.hud { height: 100%; display: grid; grid-template: "h h" auto "o c" 2.4fr "o t" 1fr / 1.2fr 1fr; gap: 12px; padding: 12px; box-sizing: border-box; background: radial-gradient(circle at 30% 50%, #06213a, #020a14 70%); }
 .hud.awaiting { --c: #ffb020; } .hud.error { --c: #ff3b3b; } .hud.acting { --c: #00ffd0; } .hud.killed { --c: #773333; }
 header { grid-area: h; display: flex; align-items: center; justify-content: space-between; letter-spacing: .35em; color: var(--c); border-bottom: 1px solid var(--c); padding-bottom: 6px; }
 .status { font-size: .75rem; letter-spacing: .2em; }
 .orb { grid-area: o; min-height: 0; }
 .panel { background: var(--bg); border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; min-height: 0; box-shadow: 0 0 14px color-mix(in srgb, var(--c) 25%, transparent) inset; }
 .panel h2 { margin: 0 0 8px; font-size: .7rem; letter-spacing: .3em; color: var(--c); }
-.console { grid-area: c; } .timeline { grid-area: t; }
+.tabs { grid-area: c; display: flex; flex-direction: column; min-height: 0; gap: 8px; } .tabs > .panel { flex: 1; overflow-y: auto; }
+.timeline { grid-area: t; }
 .log { flex: 1; overflow-y: auto; font-size: .85rem; } .log p { margin: 0 0 6px; } .log b { color: var(--c); margin-right: 6px; font-size: .7rem; } .log .user { opacity: .75; }
 input { background: transparent; border: 1px solid var(--c); color: inherit; padding: 8px; width: 100%; box-sizing: border-box; border-radius: 4px; }
 ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; font-size: .8rem; }
@@ -19,3 +20,19 @@ li.running .dot { background: #00ffd0; animation: p 1s infinite; } li.ok .dot { 
 .approvals { position: fixed; inset: auto 24px 24px auto; max-width: 420px; border-color: #ffb020; z-index: 10; }
 .approvals pre { max-height: 120px; overflow: auto; background: #0008; padding: 6px; font-size: .75rem; }
 .approvals button { margin-right: 8px; padding: 6px 14px; cursor: pointer; } .approvals .deny { background: #5a0f0f; color: #fff; } .warn { color: #ffb020; }
+
+nav { display: flex; gap: 6px; } nav button { flex: 1; background: transparent; color: inherit; border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); padding: 6px; letter-spacing: .2em; font-size: .7rem; cursor: pointer; border-radius: 4px; }
+nav button.on { background: color-mix(in srgb, var(--c) 22%, transparent); color: var(--c); border-color: var(--c); }
+.notice { padding: 6px 10px; border-radius: 4px; font-size: .8rem; border: 1px solid #ffb020; color: #ffb020; } .notice.error { border-color: #ff3b3b; color: #ff8080; }
+.panel h3 { margin: 12px 0 4px; font-size: .68rem; letter-spacing: .15em; color: var(--c); opacity: .85; } .panel h2.sub { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; }
+.count { opacity: .6; letter-spacing: 0; } .hint { margin: 0 0 8px; font-size: .72rem; opacity: .65; }
+.row { display: flex; gap: 6px; margin-bottom: 6px; } .row input, .row select { min-width: 0; } .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+select, button { background: #0a2236; color: inherit; border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); border-radius: 4px; padding: 5px 9px; cursor: pointer; } button:disabled { opacity: .4; cursor: default; }
+button.deny { background: #3a1010; } button.small { padding: 2px 8px; font-size: .65rem; }
+.tag { font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--c); border: 1px solid var(--c); border-radius: 3px; padding: 0 5px; }
+.panel li { gap: 8px; } .panel li.empty { opacity: .5; } .panel label { display: flex; align-items: center; gap: 8px; cursor: pointer; } code { font-size: .78rem; color: #9fe3ff; }
+.dot.ok { background: #3ddc84; } .dot.failed { background: #ff3b3b; }
+.perms > *, .mem > * { flex-shrink: 0; }                   /* sin esto las listas se aplastan dentro del panel con scroll */
+input[type=checkbox] { width: auto; margin: 0; accent-color: var(--c); }
+select { min-width: 9.5rem; }
+.panel li em { white-space: nowrap; font-size: .7rem; }

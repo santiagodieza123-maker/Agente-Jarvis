@@ -1,4 +1,4 @@
-import type { JarvisEvent } from "./events";
+import { asMemory, asPermissions, type JarvisEvent, type MemorySnapshot, type PermissionsSnapshot } from "./events";
 
 export type AgentState = "idle" | "thinking" | "acting" | "awaiting" | "error" | "killed";
 export type Conn = "connecting" | "open" | "closed";
@@ -18,14 +18,18 @@ export interface HudState {
   timeline: TimelineItem[];
   approvals: Approval[];
   chat: { who: "user" | "jarvis"; text: string }[];
+  memory: MemorySnapshot | null;
+  permissions: PermissionsSnapshot | null;
+  notice: { level: string; text: string; id: number } | null;
 }
 
-export const initial: HudState = { conn: "connecting", agent: "idle", plan: "", timeline: [], approvals: [], chat: [] };
+export const initial: HudState = { conn: "connecting", agent: "idle", plan: "", timeline: [], approvals: [], chat: [], memory: null, permissions: null, notice: null };
 
 export type Action =
   | { kind: "conn"; conn: Conn }
   | { kind: "event"; event: JarvisEvent }
-  | { kind: "user"; text: string };
+  | { kind: "user"; text: string }
+  | { kind: "clear_notice"; id: number };
 
 const MAX_TIMELINE = 200;
 let seq = 0;
@@ -35,6 +39,7 @@ export function reduce(s: HudState, a: Action): HudState {
     const agent = a.conn === "closed" && s.agent !== "killed" ? "error" : a.conn === "open" && s.agent === "error" ? "idle" : s.agent;
     return { ...s, conn: a.conn, agent };
   }
+  if (a.kind === "clear_notice") return s.notice?.id === a.id ? { ...s, notice: null } : s;
   if (a.kind === "user") return { ...s, chat: [...s.chat, { who: "user", text: a.text }] };
 
   const { type, payload: p } = a.event;
@@ -65,6 +70,12 @@ export function reduce(s: HudState, a: Action): HudState {
       const timeline = denied ? [...s.timeline, { id: ++seq, ts: a.event.ts, tool, status: "denied" as const }].slice(-MAX_TIMELINE) : s.timeline;
       return { ...s, approvals, timeline, agent: approvals.length ? "awaiting" : "thinking" };
     }
+    case "memory.changed":
+      return { ...s, memory: asMemory(p) ?? s.memory };
+    case "permissions.changed":
+      return { ...s, permissions: asPermissions(p) ?? s.permissions };
+    case "ui.notice":
+      return { ...s, notice: { level: String(p.level ?? "info"), text: String(p.text ?? "").slice(0, 300), id: ++seq } };
     case "kill.triggered":
       return { ...s, agent: "killed", approvals: [] };
     default:
