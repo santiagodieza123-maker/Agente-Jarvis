@@ -50,7 +50,9 @@ def test_pipe_acl_only_user_and_system(live):
     proc, pipe, cl, home, ddir, pw = live
     sddl = pw.acl_of(pipe)
     print("SDDL de la tubería:", sddl)
-    assert pw.user_sid() in sddl and ";;;SY)" in sddl
+    sid = pw.user_sid()
+    assert (sid in sddl or (sid.endswith("-500") and ";;;LA)" in sddl)) and ";;;SY)" in sddl     # SDDL abrevia el RID 500 como "LA"
+    assert sddl.count("(A;") == 2
     for everyone in (";;;WD)", ";;;AU)", ";;;BU)", ";;;AN)", ";;;NU)"):
         assert everyone not in sddl, sddl
 
