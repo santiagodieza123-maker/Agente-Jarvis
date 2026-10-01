@@ -124,7 +124,7 @@ def test_parameters_defaults_and_overrides(tmp_path):
         assert r["steps"][0]["args"] == {"path": "{{ruta}}", "content": "{{mensaje}}"} and r["params"] == {"mensaje": "Hola Ana", "ruta": str(ws / "a.txt")}
         await h({"type": "recipes.run", "id": rid, "params": {"mensaje": "Adiós Luis"}})      # ruta usa el valor por defecto
         await h._task
-        assert (ws / "a.txt").read_text() == "Adiós Luis"
+        assert (ws / "a.txt").read_text(encoding="utf-8") == "Adiós Luis"
         # parámetros inválidos / argumentos que no son texto / pasos inexistentes
         drain(q)
         for m in ({"step": 9, "arg": "content", "name": "x"}, {"step": 0, "arg": "nope", "name": "x"}, {"step": 0, "arg": "content", "name": "Mal Nombre"}):
