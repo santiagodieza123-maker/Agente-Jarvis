@@ -10,7 +10,7 @@ function Broker({ b, send }: { b: BrokerSnapshot | null; send: (m: HudMessage) =
   if (!b) return null;
   return (
     <div className="broker" data-testid="broker">
-      <h3>Broker elevado (administrador)</h3>
+      <h3>Manos de administrador</h3>
       <p className="hint" data-testid="broker-state">
         {!b.available ? "No disponible: solo existe en Windows."
           : b.running ? <>✔ En marcha{b.elevated ? " con privilegios de administrador" : " (SIN elevar: las operaciones fallarán)"}{b.dry_run ? " · modo simulación" : ""} · pid {b.pid}</>
@@ -46,7 +46,7 @@ export function PermissionsPanel({ perms, broker, send }: { perms: PermissionsSn
   return (
     <section className="panel perms" data-testid="permissions-panel">
       <h2>LLAVES</h2>
-      <h3>Pedir confirmación antes de…</h3>
+      <h3>Antes de hacer esto, pregúntame…</h3>
       <ul>
         {perms.classes.map((c) => (
           <li key={c.name}>
@@ -59,7 +59,7 @@ export function PermissionsPanel({ perms, broker, send }: { perms: PermissionsSn
           </li>
         ))}
       </ul>
-      <h3>Herramientas</h3>
+      <h3>Qué sabe hacer</h3>
       <ul>
         {perms.tools.map((t) => (
           <li key={t.name}>
@@ -72,7 +72,7 @@ export function PermissionsPanel({ perms, broker, send }: { perms: PermissionsSn
           </li>
         ))}
       </ul>
-      <h3>Carpetas accesibles</h3>
+      <h3>Dónde puede meter mano</h3>
       <ul>
         {perms.roots.map((r) => (
           <li key={r} data-testid="root">
@@ -80,10 +80,10 @@ export function PermissionsPanel({ perms, broker, send }: { perms: PermissionsSn
             <button className="deny" onClick={() => send({ type: "permissions.remove_root", path: r })} aria-label={`Quitar ${r}`}>Quitar</button>
           </li>
         ))}
-        {!perms.roots.length && <li className="empty">Ninguna: Jarvis no puede leer ni escribir archivos</li>}
+        {!perms.roots.length && <li className="empty">Ninguna: Jarvis no puede tocar un solo archivo</li>}
       </ul>
       <form className="row" onSubmit={(e) => { e.preventDefault(); const t = root.trim(); if (t) { send({ type: "permissions.add_root", path: t }); setRoot(""); } }}>
-        <input value={root} onChange={(e) => setRoot(e.target.value)} placeholder="Ruta absoluta de una carpeta…" aria-label="Nueva carpeta" />
+        <input value={root} onChange={(e) => setRoot(e.target.value)} placeholder="Ruta completa de una carpeta que le prestas…" aria-label="Nueva carpeta" />
         <button disabled={!root.trim()}>Añadir</button>
       </form>
       <Broker b={broker} send={send} />

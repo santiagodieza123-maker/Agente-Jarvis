@@ -60,3 +60,22 @@ def test_slow_subscriber_never_blocks():
     for i in range(10):
         bus.publish("state.changed", {"i": i})
     assert q.qsize() == 2
+
+
+def test_abrupt_disconnect_is_not_a_handler_error(capsys):
+    import asyncio
+    from websockets.exceptions import ConnectionClosedError
+    from core.bus import EventBus
+    from core.server import HudServer
+
+    class Ws:
+        def __aiter__(self):
+            return self
+        async def __anext__(self):
+            raise ConnectionClosedError(None, None)
+        async def send(self, _):
+            pass
+
+    srv = HudServer(EventBus(), token="t")
+    asyncio.run(srv._handler(Ws()))
+    assert srv.clients == 0

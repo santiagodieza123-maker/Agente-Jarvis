@@ -32,27 +32,27 @@ export function ConfigPanel({ config, send }: { config: ConfigSnapshot | null; s
     <section className="panel cfg" data-testid="config-panel">
       <h2>TALLER</h2>
 
-      <h3>Modelo</h3>
+      <h3>El cerebro</h3>
       <form className="row" onSubmit={(e) => { e.preventDefault(); const m = model.trim(); if (m && m !== v.model) send({ type: "config.set", values: { model: m } }); }}>
         <input value={model} onChange={(e) => setModel(e.target.value)} maxLength={64} aria-label="Modelo" data-testid="model" />
         <button disabled={!model.trim() || model.trim() === v.model}>Aplicar</button>
       </form>
 
-      <h3>Clave de API (Gemini)</h3>
+      <h3>La llave de Gemini</h3>
       <p className="hint" data-testid="key-status">
-        {k.configured ? <>✔ Configurada <code>{k.hint}</code> · origen: {k.source}{k.source === "almacén" ? ` (${k.backend})` : ""}</> : <span className="warn">✖ Sin clave: Jarvis no puede razonar</span>}
+        {k.configured ? <>✔ Llave guardada <code>{k.hint}</code> · origen: {k.source}{k.source === "almacén" ? ` (${k.backend})` : ""}</> : <span className="warn">✖ Sin clave: Jarvis no puede razonar</span>}
       </p>
       <form className="row" onSubmit={(e) => { e.preventDefault(); if (key.trim()) { send({ type: "config.set_api_key", key: key.trim() }); setKey(""); } }}>
         <input type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false}
-               placeholder="Pega una clave nueva (no se vuelve a mostrar)" aria-label="Clave de API" data-testid="api-key" />
+               placeholder="Pega aquí una llave nueva (después no se vuelve a mostrar)" aria-label="Clave de API" data-testid="api-key" />
         <button disabled={!key.trim()}>Guardar</button>
       </form>
       <div className="row">
-        <button onClick={() => send({ type: "config.test_llm" })} disabled={!config.llm_ready} data-testid="test-llm">Probar conexión</button>
-        <button className="deny" onClick={() => send({ type: "config.clear_api_key" })} disabled={k.source !== "almacén"} title="Solo quita la guardada desde aquí">Quitar clave guardada</button>
+        <button onClick={() => send({ type: "config.test_llm" })} disabled={!config.llm_ready} data-testid="test-llm">¿Me oyes, Gemini?</button>
+        <button className="deny" onClick={() => send({ type: "config.clear_api_key" })} disabled={k.source !== "almacén"} title="Solo quita la guardada desde aquí">Olvidar la llave guardada</button>
       </div>
 
-      <h3>Límites por tarea</h3>
+      <h3>Correas</h3>
       <form className="limits" onSubmit={apply}>
         {LIMIT_FIELDS.map((f) => (
           <label key={f}>
@@ -61,10 +61,10 @@ export function ConfigPanel({ config, send }: { config: ConfigSnapshot | null; s
           </label>
         ))}
         {err && <p className="warn" role="alert">{err}</p>}
-        <button>Aplicar límites</button>
+        <button>Ajustar correas</button>
       </form>
 
-      <h3>Tema</h3>
+      <h3>Color de la esfera</h3>
       <div className="row swatches" role="radiogroup" aria-label="Color">
         {config.accents.map((a) => (
           <button key={a} role="radio" aria-checked={v.accent === a} className={v.accent === a ? "on" : ""} style={{ borderColor: ACCENT_COLOR[a] ?? "#fff" }}
@@ -84,7 +84,7 @@ export function ConfigPanel({ config, send }: { config: ConfigSnapshot | null; s
         Confirmar las escrituras mientras haya extensiones externas activas <em>(recomendado)</em>
       </label>
 
-      <h3>Consumo</h3>
+      <h3>Lo que hemos gastado</h3>
       <table className="usage" data-testid="usage">
         <thead><tr><th></th><th>llamadas</th><th>entrada</th><th>salida</th></tr></thead>
         <tbody>
@@ -93,8 +93,8 @@ export function ConfigPanel({ config, send }: { config: ConfigSnapshot | null; s
         </tbody>
       </table>
 
-      <h3>Atajos</h3>
-      <p className="hint">Detener todo: <kbd>{config.fixed.kill_hotkey}</kbd> — lo fija el watchdog (proceso aparte); no se puede cambiar desde aquí.</p>
+      <h3>Botón rojo</h3>
+      <p className="hint">Frenar todo: <kbd>{config.fixed.kill_hotkey}</kbd> — lo vigila el watchdog, un proceso aparte que ni yo puedo tocar.</p>
     </section>
   );
 }

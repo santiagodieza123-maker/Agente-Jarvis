@@ -22,7 +22,7 @@ function Tile({ title, value, sub, values, max, testid }: { title: string; value
 
 export function SystemPanel({ stats }: { stats: Stats[] }) {
   const s = stats[stats.length - 1];
-  if (!s) return <section className="panel sys" data-testid="system-panel"><h2>PULSO</h2><p className="empty">Esperando la primera muestra…</p></section>;
+  if (!s) return <section className="panel sys" data-testid="system-panel"><h2>PULSO</h2><p className="empty">Tomando el pulso…</p></section>;
   const lat = stats.map((x) => x.llm.last_ms ?? 0);
   return (
     <section className="panel sys" data-testid="system-panel">
@@ -39,16 +39,16 @@ export function SystemPanel({ stats }: { stats: Stats[] }) {
           <div className="bar" title="Uso de la GPU"><i style={{ width: `${Math.min(100, s.gpu.util)}%` }} /></div><em>{s.gpu.util.toFixed(0)} %</em>
           <div className="bar" title="Memoria de vídeo"><i style={{ width: `${Math.min(100, (100 * s.gpu.mem_used) / (s.gpu.mem_total || 1))}%` }} /></div><em>{s.gpu.mem_used.toFixed(0)}/{s.gpu.mem_total.toFixed(0)} MB</em></div>
       )}
-      <h3>Componentes</h3>
+      <h3>Órganos</h3>
       <ul className="comps">
         {s.components.map((c) => (
           <li key={c.name} data-testid={`comp-${c.name}`}><i className={`dot ${DOT[c.state] ?? "warn"}`} /><b>{c.name}</b><span>{c.state}</span><small>{c.detail}</small></li>
         ))}
       </ul>
-      <h3>Procesos hijos ({s.children.length})</h3>
+      <h3>Criaturas lanzadas ({s.children.length})</h3>
       <table className="kids"><tbody>
         {s.children.map((k) => <tr key={k.pid}><td>{k.name}</td><td>{k.pid}</td><td>{k.cpu.toFixed(0)} %</td><td>{mb(k.rss)}</td></tr>)}
-        {!s.children.length && <tr><td className="empty">Ninguno (navegador, shell y extensiones sin arrancar)</td></tr>}
+        {!s.children.length && <tr><td className="empty">Ninguna (navegador, shell y extensiones duermen)</td></tr>}
       </tbody></table>
     </section>
   );

@@ -91,12 +91,12 @@ export function ExtensionsPanel({ ext, send }: { ext: ExtensionsSnapshot | null;
   return (
     <section className="panel exts" data-testid="extensions-panel">
       <h2>INJERTOS (MCP)</h2>
-      <p className="hint">Servidores MCP por stdio. Sus herramientas piden confirmación siempre, salvo las que marques como «lectura», y su salida se trata como no confiable.</p>
+      <p className="hint">Poderes extra que le enchufas a Jarvis (servidores MCP). Sus herramientas piden confirmación siempre, salvo las que marques como «lectura», y su salida se trata como no confiable.</p>
       <ul>
         {ext.extensions.map((e) => <Ext key={e.name} e={e} send={send} />)}
-        {!ext.extensions.length && <li className="empty">Ninguna extensión instalada</li>}
+        {!ext.extensions.length && <li className="empty">Nada injertado todavía</li>}
       </ul>
-      <h3>Añadir</h3>
+      <h3>Injertar uno nuevo</h3>
       <form className="addext" onSubmit={add}>
         <input value={name} onChange={(e) => setName(e.target.value.toLowerCase())} placeholder="nombre (a-z, 0-9, - _)" maxLength={24} aria-label="Nombre" data-testid="ext-name" />
         <input value={command} onChange={(e) => setCommand(e.target.value)} placeholder="comando, p. ej.: npx -y @modelcontextprotocol/server-everything" maxLength={1000} aria-label="Comando" data-testid="ext-command" />

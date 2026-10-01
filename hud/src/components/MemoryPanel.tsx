@@ -64,13 +64,13 @@ export function MemoryPanel({ memory, send }: { memory: MemorySnapshot | null; s
   return (
     <section className="panel mem" data-testid="memory-panel">
       <h2>RECUERDOS <span className="count">{memory.notes.length}/{memory.limits.notes}</span></h2>
-      <p className="hint">Notas que Jarvis recibe como contexto en cada tarea. Solo tú puedes crearlas o cambiarlas.</p>
+      <p className="hint">Lo que quieres que Jarvis recuerde siempre. Solo tú escribes aquí; él solo lee.</p>
       <form className="row" onSubmit={(e) => { e.preventDefault(); const t = text.trim(); if (t) { send({ type: "memory.add", kind, content: t }); setText(""); } }}>
         <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Tipo de nota">
           {memory.kinds.map((k) => <option key={k}>{k}</option>)}
         </select>
         <input value={text} maxLength={memory.limits.content} onChange={(e) => setText(e.target.value)}
-               placeholder={full ? "límite de notas alcanzado" : "Nueva nota…"} disabled={full} aria-label="Contenido de la nota" />
+               placeholder={full ? "la cabeza está llena: borra algo primero" : "Anota algo que no quieres que olvide…"} disabled={full} aria-label="Contenido de la nota" />
         <button disabled={full || !text.trim()}>Añadir</button>
       </form>
       <ul className="notes">
@@ -91,13 +91,13 @@ export function MemoryPanel({ memory, send }: { memory: MemorySnapshot | null; s
             )}
           </li>
         ))}
-        {!memory.notes.length && <li className="empty">Sin notas</li>}
+        {!memory.notes.length && <li className="empty">Cabeza en blanco, por ahora</li>}
       </ul>
       <h2 className="sub">RECETAS <span className="count">{(memory.recipes ?? []).length}</span></h2>
-      <p className="hint">Tareas que funcionaron, guardadas desde el historial. Se repiten sin llamar al modelo y no concede permisos: cada paso vuelve a pedir lo que pediría normalmente.</p>
+      <p className="hint">Trucos que ya funcionaron. Se repiten sin llamar al modelo y no concede permisos: cada paso vuelve a pedir lo que pediría normalmente.</p>
       <ul className="recipes">
         {(memory.recipes ?? []).map((r) => <RecipeCard key={r.id} r={r} send={send} />)}
-        {!(memory.recipes ?? []).length && <li className="empty">Sin recetas: guarda una desde una tarea completada del historial</li>}
+        {!(memory.recipes ?? []).length && <li className="empty">Sin recetas aún: guarda una tarea que haya salido bien y se repetirá sola</li>}
       </ul>
       <h2 className="sub">HISTORIAL DE TAREAS
         {memory.episodes.length > 0 && <button className="deny small" onClick={() => send({ type: "memory.clear_episodes" })}>Limpiar</button>}
@@ -111,7 +111,7 @@ export function MemoryPanel({ memory, send }: { memory: MemorySnapshot | null; s
               onClick={() => { const n = window.prompt("Nombre de la receta:", e.goal.slice(0, 40)); if (n) send({ type: "recipes.save", episode_id: e.id, name: n.trim() }); }}>Guardar receta</button>}
           </li>
         ))}
-        {!memory.episodes.length && <li className="empty">Sin tareas todavía</li>}
+        {!memory.episodes.length && <li className="empty">Aún no hemos hecho nada juntos</li>}
       </ul>
     </section>
   );

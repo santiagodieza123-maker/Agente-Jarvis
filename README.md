@@ -26,6 +26,8 @@ Desarrollo en navegador: `cd hud && npm run dev` y `python tools/launch.py --bro
 La ventana no tiene bordes: la cabecera arrastra y trae minimizar, click-through y cerrar. **Ctrl+Shift+F9** activa/desactiva el click-through
 aunque la ventana no reciba clics, y el HUD lo desactiva solo cuando hay una aprobación pendiente. Pruebas: `cd hud && npm test`, `cd hud/src-tauri && cargo test`.
 
+**Estela:** tocar la esfera abre el historial de tareas (buscar, repetir con un clic, copiar la respuesta). Los textos del HUD viven en `hud/src/copy.ts` y en cada panel.
+
 ## Verificación continua (CI)
 `.github/workflows/ci.yml` ejecuta en cada push, en Linux **y en Windows** (runners reales de GitHub): `pytest`, tipos/`vitest`/build del HUD,
 `cargo test`, escaneo de secretos, `tools/verify_windows.py` (watchdog, SendInput, PowerShell, WebSocket, Playwright, WebView2), la compilación del HUD de

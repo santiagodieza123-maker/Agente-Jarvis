@@ -9,6 +9,7 @@ from http import HTTPStatus
 from urllib.parse import parse_qs, urlsplit
 
 from websockets.asyncio.server import serve
+from websockets.exceptions import ConnectionClosed
 
 from core.bus import EventBus
 
@@ -48,6 +49,7 @@ class HudServer:
             self.on_connect()
         q = self.bus.subscribe()
         self.clients += 1
+        sender = None
         try:
             async def pump():
                 while True:
@@ -62,8 +64,11 @@ class HudServer:
                     res = self.on_message(msg)
                     if asyncio.iscoroutine(res):
                         await res
-            sender.cancel()
+        except ConnectionClosed:
+            pass                                    # el HUD se fue sin cerrar el socket (pestaña cerrada, red): no es un error del núcleo
         finally:
+            if sender is not None:
+                sender.cancel()
             self.clients -= 1
             self.bus.unsubscribe(q)
 
