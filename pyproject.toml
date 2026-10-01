@@ -6,10 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "jarvis"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["pydantic>=2", "websockets>=13", "langgraph>=1.0"]
+dependencies = ["pydantic>=2", "websockets>=13", "langgraph>=1.0", "pillow>=10", "mss>=9", "psutil>=5.9"]
 
 [project.optional-dependencies]
-windows = ["mss", "uiautomation", "comtypes", "keyring"]
+windows = ["uiautomation", "comtypes", "keyring"]
 mcp = ["mcp>=1.2"]
 web = ["playwright>=1.56"]   # luego: playwright install chromium
 dev = ["pytest"]

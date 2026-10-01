@@ -54,6 +54,7 @@ class State(TypedDict):
     tainted: bool
     steps: int
     tokens: int
+    image: bytes | None
     failures: int
     answer: str
     status: str   # running | done | aborted
@@ -93,7 +94,7 @@ class Orchestrator:
         self.audit.append("task.started", goal=goal)
         self.bus.publish("state.changed", {"state": "thinking"})
         init: State = {"goal": goal, "messages": [{"role": "user", "content": goal}], "pending": None,
-                       "tainted": False, "steps": 0, "tokens": 0, "failures": 0, "answer": "", "status": "running"}
+                       "tainted": False, "steps": 0, "tokens": 0, "image": None, "failures": 0, "answer": "", "status": "running"}
         final = await self._graph.ainvoke(init, {"recursion_limit": 4 * self.max_steps + 10})
         self.audit.append("task.finished", status=final["status"], steps=final["steps"], tokens=final["tokens"])
         self.bus.publish("state.changed", {"state": "idle"})
@@ -109,13 +110,13 @@ class Orchestrator:
         schemas = [t.schema() for t in self.tools.values() if self.is_enabled(t.name)]
         wd = self.workdir()
         where = f"\nCarpeta de trabajo: {wd}. Las rutas relativas se resuelven dentro de ella." if wd else ""
-        r = await asyncio.to_thread(self.llm.generate, SYSTEM + where + self.memory_block(), s["messages"], schemas)
+        r = await asyncio.to_thread(self.llm.generate, SYSTEM + where + self.memory_block(), s["messages"], schemas, s.get("image"))
         tokens = s["tokens"] + r.input_tokens + r.output_tokens
         self.bus.publish("plan.updated", {"text": r.text, "next": r.tool_calls[0].name if r.tool_calls else None})
         if not r.tool_calls:
-            return {"status": "done", "answer": r.text, "tokens": tokens}
+            return {"status": "done", "answer": r.text, "tokens": tokens, "image": None}
         call = r.tool_calls[0]
-        return {"pending": call, "tokens": tokens,
+        return {"pending": call, "tokens": tokens, "image": None,      # la imagen se envía una sola vez, con la llamada siguiente
                 "messages": s["messages"] + [{"role": "assistant", "content": "", "call": {"name": call.name, "args": call.args, "signature": call.signature}}]}
 
     def _record(self, s: State, content: str, untrusted: bool = False, name: str | None = None) -> list[dict]:
@@ -172,7 +173,7 @@ class Orchestrator:
             ok, err = True, ""
         except Exception as e:  # el fallo vuelve al planificador, no tumba la tarea
             out, ok, err = None, False, f"{type(e).__name__}: {e}"
-        return {"steps": steps, "pending": None,
+        return {"steps": steps, "pending": None, "image": getattr(out, "image", None) if ok else None,
                 "tainted": s["tainted"] or (tool.untrusted_output and ok),
                 "failures": s["failures"] + (0 if ok else 1),
                 "messages": self._record(s, str(out) if ok else f"error: {err}", tool.untrusted_output and ok, name=call.name),

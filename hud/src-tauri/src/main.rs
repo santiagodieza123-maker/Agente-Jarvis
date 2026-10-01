@@ -92,6 +92,7 @@ fn main() {
                 .decorations(false)
                 .transparent(true)
                 .always_on_top(true)
+                .content_protected(true)   // el HUD no sale en capturas de pantalla: el agente nunca ve (ni pulsa) las aprobaciones
                 .resizable(true)
                 .initialization_script(script)
                 .build()?;

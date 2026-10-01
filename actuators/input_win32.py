@@ -70,3 +70,36 @@ def hotkey(*vks: int) -> None:
             i.ki = KEYBDINPUT(vk, 0, flags, 0, 0)
             evs.append(i)
     _send(evs)
+
+
+# ---------- teclas por nombre y texto Unicode ----------
+KEYEVENTF_UNICODE = 0x0004
+VK = {"ctrl": 0x11, "shift": 0x10, "alt": 0x12, "enter": 0x0D, "tab": 0x09, "esc": 0x1B, "escape": 0x1B, "backspace": 0x08, "delete": 0x2E,
+      "home": 0x24, "end": 0x23, "pageup": 0x21, "pagedown": 0x22, "up": 0x26, "down": 0x28, "left": 0x25, "right": 0x27, "space": 0x20,
+      **{f"f{i}": 0x6F + i for i in range(1, 13)}, **{c: ord(c.upper()) for c in "abcdefghijklmnopqrstuvwxyz"},
+      **{str(d): 0x30 + d for d in range(10)}}
+
+
+def press(combo: str) -> None:
+    """«ctrl+shift+z», «enter», «f5»…: nombres en minúsculas separados por '+'."""
+    try:
+        vks = [VK[p] for p in combo.lower().split("+")]
+    except KeyError as e:
+        raise ValueError(f"tecla desconocida: {e.args[0]}") from None
+    hotkey(*vks)
+
+
+def type_text(text: str) -> None:
+    """Escribe texto Unicode (cualquier carácter, también tildes y emoji) con SendInput, en una sola llamada por bloque."""
+    units = []
+    data = text.encode("utf-16-le")
+    for i in range(0, len(data), 2):
+        units.append(int.from_bytes(data[i:i + 2], "little"))
+    for start in range(0, len(units), 200):            # bloques: evita eventos enormes
+        evs = []
+        for u in units[start:start + 200]:
+            for flags in (KEYEVENTF_UNICODE, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP):
+                i = INPUT(type=INPUT_KEYBOARD)
+                i.ki = KEYBDINPUT(0, u, flags, 0, 0)
+                evs.append(i)
+        _send(evs)

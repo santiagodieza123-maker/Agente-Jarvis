@@ -22,6 +22,7 @@ from core.sensitive import sensitive_hits
 from core.usage import UsageStore
 from core.settings import DEFAULTS, SecretStore, SettingsStore
 from core.tools_fs import FsTools
+from core.tools_gui import GuiTools
 from core.tools_shell import ShellTools
 from core.tools_web import WebTools
 
@@ -40,6 +41,19 @@ def jarvis_home() -> Path:
     return Path(os.environ.get("JARVIS_HOME", str(Path.home() / ".jarvis")))
 
 
+AUTO_GUI = object()          # wire(..., gui_backend=AUTO_GUI): UI Automation si estamos en Windows y está instalado; None = sin herramientas gui
+
+
+def default_gui_backend():
+    if os.name != "nt":
+        return None
+    try:
+        from perception.uia import UIABackend
+        return UIABackend()
+    except Exception:           # uiautomation/comtypes ausentes: el resto de Jarvis funciona sin las herramientas gui
+        return None
+
+
 FROM_CONFIG = object()      # wire(FROM_CONFIG, ...): el proveedor sale de los ajustes del HUD y de la clave guardada o del entorno
 
 
@@ -51,7 +65,7 @@ def build_llm(model: str, key: str | None) -> LLMProvider | None:
 
 
 def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
-         exit_fn=os._exit, approval_timeout: float = 120.0, home: Path | None = None) -> HudHandlers:
+         exit_fn=os._exit, approval_timeout: float = 120.0, home: Path | None = None, gui_backend=AUTO_GUI) -> HudHandlers:
     home = home or jarvis_home()
     audit.on_append = lambda rec: bus.publish("audit.appended", clip(rec))     # el HUD ve el log en vivo
     handlers = HudHandlers(bus, audit, exit_fn=exit_fn)
@@ -63,7 +77,9 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
     shell = ShellTools(roots[0])
     web = WebTools(os.environ.get("JARVIS_BROWSER_PROFILE", str(home / "browser-profile")),
                    headless=not cfg.values["browser_headed"])   # perfil dedicado, nunca el del usuario
-    tools = {t.name: t for t in (*fs.tools(), *shell.tools(), *web.tools())}
+    gui = default_gui_backend() if gui_backend is AUTO_GUI else gui_backend
+    gui_tools = GuiTools(gui, on_frame=lambda f: bus.publish("perception.frame", f)).tools() if gui is not None else []
+    tools = {t.name: t for t in (*fs.tools(), *shell.tools(), *web.tools(), *gui_tools)}
     policy = Policy(allowed_roots=[str(r.resolve()) for r in roots])
     memory = Memory(home / "memory.db")
     perms = PermissionStore(home / "permissions.json", policy, fs, roots, tools, protected=[REPO, home])
