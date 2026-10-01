@@ -45,6 +45,7 @@ def wire(llm: LLMProvider | None, bus: EventBus, audit: AuditLog, roots: list[Pa
         await orch.run(goal)
 
     handlers.run_task = run_task
+    handlers.panic_hooks = [shell.kill_all, web.close]
     return handlers
 
 

@@ -123,7 +123,8 @@ def test_symlink_escape_blocked_even_if_approved(tmp_path):
     llm = Scripted(call("fs.read", path=str(ws_dir / "enlace")), LLMResponse(text="x"))
     events, _ = asyncio.run(session(tmp_path, llm, hud))
     assert [e for e in events if e["type"] == "action.finished"][0]["payload"]["ok"] is False
-    assert not any("clave" in c for c in llm.seen[1] if "enlace" not in c)   # el contenido nunca llegó al LLM
+    assert all("clave" not in c for c in llm.seen[1])                    # el contenido secreto nunca llegó al LLM
+    assert any("PermissionError" in c for c in llm.seen[1])               # solo vio el error
 
 
 def test_second_task_rejected_while_running(tmp_path):

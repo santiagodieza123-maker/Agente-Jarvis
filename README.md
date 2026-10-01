@@ -15,7 +15,7 @@ Pruebas portables: `pip install -e .[dev] && pytest`. El código Win32 requiere 
 ## HUD
 Desarrollo: arranca `python -m core.main` (imprime `port` y `token`) y `cd hud && npm install && npm run dev`;
 abre `http://localhost:1420/?port=<port>&token=<token>`. Pruebas: `cd hud && npm test`.
-Pendiente de verificar: el shell de Tauri (`hud/src-tauri`) no se ha compilado (requiere Windows/Rust y `tauri icon`);
+Verificado: el shell de Tauri compila (`cargo check`, en Linux; no se ha ejecutado ni empaquetado en Windows). Pendiente:
 el lanzador que pasa puerto y token al HUD; Sin `GEMINI_API_KEY` el núcleo registra las tareas pero no las ejecuta.
 
 ## Configuración de Gemini

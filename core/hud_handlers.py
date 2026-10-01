@@ -17,6 +17,7 @@ class HudHandlers:
         self.bus, self.audit, self.exit_fn, self.run_task = bus, audit, exit_fn, run_task
         self._pending: dict[str, asyncio.Future] = {}
         self._task: asyncio.Task | None = None
+        self.panic_hooks: list[Callable[[], object]] = []   # limpieza antes de salir: matar hijos (shell, navegador)
 
     async def __call__(self, msg: dict) -> None:
         kind = msg.get("type")
@@ -51,8 +52,15 @@ class HudHandlers:
     async def panic(self) -> None:
         self.audit.append("kill.triggered", source="hud")
         self.bus.publish("kill.triggered", {"source": "hud"})
+        for hook in self.panic_hooks:   # sin watchdog delante, los hijos quedarían huérfanos
+            try:
+                res = hook()
+                if asyncio.iscoroutine(res):
+                    await asyncio.wait_for(res, 2)
+            except Exception:
+                pass                    # el pánico nunca debe fallar por una limpieza
         await asyncio.sleep(0.15)  # deja salir el evento hacia el HUD
-        # Al salir el núcleo, el watchdog (Job Object KILL_ON_JOB_CLOSE) elimina a todos los hijos.
+        # Con watchdog, además, el Job Object (KILL_ON_JOB_CLOSE) elimina a cualquier hijo que quede.
         self.exit_fn(1)
 
     async def request(self, approval_id: str, timeout: float = 120.0) -> bool:

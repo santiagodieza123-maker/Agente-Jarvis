@@ -7,3 +7,5 @@ dist/
 *.log
 audit/*.jsonl
 .env
+
+hud/src-tauri/gen/

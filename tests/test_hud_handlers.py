@@ -56,3 +56,16 @@ def test_garbage_messages_ignored(tmp_path):
         finally:
             await srv.stop()
     asyncio.run(go())
+
+
+def test_panic_runs_cleanup_hooks_even_if_one_fails(tmp_path):
+    order = []
+
+    async def go():
+        h = HudHandlers(EventBus(), AuditLog(tmp_path / "a.jsonl"), exit_fn=lambda c: order.append("exit"))
+        async def aclose(): order.append("web")
+        def boom(): raise RuntimeError("x")
+        h.panic_hooks = [lambda: order.append("shell"), boom, aclose]
+        await h.panic()
+    asyncio.run(go())
+    assert order == ["shell", "web", "exit"]          # un hook roto no impide limpiar ni salir

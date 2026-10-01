@@ -1,6 +1,5 @@
 import asyncio
 import os
-import sys
 
 import pytest
 
@@ -50,3 +49,16 @@ def test_timeout_kills_whole_tree(tmp_path):
 def test_output_cap_kills_runaway(tmp_path):
     out = run(ShellTools(tmp_path, max_output=1000, timeout=10).exec("yes"))
     assert "truncada" in out and len(out) < 1300
+
+
+@posix
+def test_kill_all_stops_running_command(tmp_path):
+    async def go():
+        sh = ShellTools(tmp_path, timeout=30)
+        t = asyncio.create_task(sh.exec("sleep 30"))
+        await asyncio.sleep(0.4)
+        assert sh._procs
+        sh.kill_all()
+        out = await asyncio.wait_for(t, 5)
+        assert "exit -9" in out and not sh._procs
+    asyncio.run(go())

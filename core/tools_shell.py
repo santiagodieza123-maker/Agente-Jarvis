@@ -48,12 +48,27 @@ async def _kill_tree(proc: asyncio.subprocess.Process) -> None:
 class ShellTools:
     def __init__(self, cwd: str | Path, timeout: float = 30.0, max_output: int = 20_000):
         self.cwd, self.timeout, self.max_output = Path(cwd), timeout, max_output
+        self._procs: set[asyncio.subprocess.Process] = set()
+
+    def kill_all(self) -> None:
+        """Mata los árboles de procesos en curso (pánico). Síncrono: no depende del event loop."""
+        for proc in list(self._procs):
+            if proc.returncode is not None:
+                continue
+            try:
+                if os.name == "nt":
+                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)
+                else:
+                    os.killpg(proc.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
 
     async def exec(self, command: str) -> str:
         proc = await asyncio.create_subprocess_exec(
             *_argv(command), cwd=self.cwd, env=clean_env(),
             stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
             start_new_session=(os.name != "nt"))   # grupo propio: se puede matar todo el árbol
+        self._procs.add(proc)
         chunks: list[bytes] = []
         size = 0
         truncated = False
@@ -72,13 +87,16 @@ class ShellTools:
 
         timed_out = False
         try:
-            await asyncio.wait_for(read(), self.timeout)
-        except asyncio.TimeoutError:
-            timed_out = True
-        if truncated or timed_out:
-            await _kill_tree(proc)
-        else:
-            await proc.wait()
+            try:
+                await asyncio.wait_for(read(), self.timeout)
+            except asyncio.TimeoutError:
+                timed_out = True
+            if truncated or timed_out:
+                await _kill_tree(proc)
+            else:
+                await proc.wait()
+        finally:
+            self._procs.discard(proc)
         out = b"".join(chunks).decode("utf-8", errors="replace")
         if timed_out:
             out += f"\n[timeout tras {self.timeout:g}s: proceso terminado]"
