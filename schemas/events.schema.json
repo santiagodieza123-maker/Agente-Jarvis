@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JarvisEvent",
+  "version": "0.1.0",
+  "type": "object",
+  "required": ["v", "type", "ts", "payload"],
+  "properties": {
+    "v": {"const": "0.1.0"},
+    "ts": {"type": "number"},
+    "type": {"enum": [
+      "plan.updated", "action.started", "action.finished", "perception.frame",
+      "approval.requested", "approval.granted", "approval.denied",
+      "memory.changed", "state.changed", "kill.triggered"
+    ]},
+    "payload": {"type": "object"}
+  }
+}
