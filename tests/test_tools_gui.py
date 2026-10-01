@@ -33,8 +33,10 @@ def app():
 
     def hook(win, el):
         els = win["els"]
+        lbl = next(e for e in els if e.role == "text")
+        entry = next(e for e in els if e.name == "Nombre")
         if el.name == "Saludar":
-            els[0].name = "Estado: Hola, " + els[1].value
+            lbl.name = "Estado: Hola, " + entry.value
         elif el.name == "Aceptar":
             el.checked = not el.checked
     be.on_activate = hook
@@ -227,3 +229,40 @@ def test_diff_summary():
     assert "cambió la ventana" in diff_summary(a, Snapshot(3, WindowInfo(2, "B"), []))
     secret = Snapshot(2, w, [Element(1, "x", "edit", (0, 0, 1, 1), value="zzz", secret=True)])
     assert "zzz" not in diff_summary(Snapshot(1, w, [Element(1, "x", "edit", (0, 0, 1, 1), value="a", secret=True)]), secret)
+
+
+# ---------- direccionar por nombre y registrar argumentos estables (recetas) ----------
+def test_click_by_name_role_and_recipe_args():
+    be, g = tools()
+    run(g.observe())
+    run(g.type(2, "Ana"))
+    r = run(g.click(name="Saludar", role="button"))
+    assert "Estado: Hola, Ana" in r and r.recipe_args == {"name": "Saludar", "role": "button"}
+    r2 = run(g.click(id=5))                                              # por número también registra el nombre estable
+    assert r2.recipe_args == {"name": "Aceptar", "role": "checkbox"}
+    t = run(g.type(name="Nombre", role="edit", text="Luis", submit=True))
+    assert t.recipe_args == {"name": "Nombre", "role": "edit", "text": "Luis", "submit": True}
+
+
+def test_name_resolution_errors_and_nth():
+    be, g = tools()
+    be.wins[10]["els"].append(Element(0, "Saludar", "button", (210, 120, 300, 150)))      # segundo botón con el mismo nombre
+    run(g.observe())
+    with pytest.raises(GuiError, match="ambiguo"):
+        run(g.click(name="Saludar"))
+    r = run(g.click(name="Saludar", nth=1))
+    assert r.recipe_args == {"name": "Saludar", "role": "button", "nth": 1}
+    with pytest.raises(GuiError, match="no hay ningún elemento"):
+        run(g.click(name="Inexistente"))
+    with pytest.raises(GuiError, match="nth fuera de rango"):
+        run(g.click(name="Saludar", nth=5))
+    assert "tipo edit" in str(pytest.raises(GuiError, run, g.click(name="Saludar", role="edit")).value)
+    assert g.tools()[3].parameters["required"] == []
+
+
+def test_recipe_args_are_none_for_unnamed_elements():
+    be, g = tools()
+    be.wins[10]["els"].append(Element(0, "", "button", (300, 10, 330, 40)))
+    run(g.observe())
+    r = run(g.click(id=7))
+    assert r.recipe_args is None

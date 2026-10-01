@@ -79,3 +79,6 @@ nav button { min-width: 0; padding-inline: 2px; letter-spacing: .08em; white-spa
 @keyframes pulse { 50% { stroke-opacity: .35; } }
 .elist { list-style: none; margin: 8px 0 0; padding: 0; font-size: .75rem; display: grid; gap: 2px; } .elist li { padding: 2px 6px; border-radius: 3px; } .elist li.on { background: color-mix(in srgb, var(--c) 25%, transparent); } .elist span { opacity: .6; margin: 0 4px; }
 nav { flex-wrap: wrap; } nav button { flex: 1 1 auto; padding-inline: 6px; }
+.recipes { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; } .recipe { border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); border-radius: 4px; padding: 8px; display: grid; gap: 6px; min-width: 0; }
+.recipe .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .params { display: grid; gap: 4px; } .params label { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 6px; align-items: center; font-size: .78rem; }
+.steps { margin: 0; padding-left: 18px; font-size: .74rem; display: grid; gap: 3px; } .steps .arg { margin-right: 8px; overflow-wrap: anywhere; } .steps q { color: var(--c); } .prebox { display: grid; gap: 3px; font-size: .74rem; } .prebox textarea { background: transparent; color: inherit; border: 1px solid var(--c); border-radius: 4px; padding: 5px; font-family: monospace; width: 100%; box-sizing: border-box; }

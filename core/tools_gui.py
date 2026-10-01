@@ -12,7 +12,7 @@ from core.orchestrator import Tool
 from core.policy import ActionClass
 from perception import som
 from perception.backend import GuiBackend, GuiError
-from perception.model import Snapshot, WindowInfo, diff_summary
+from perception.model import Element, Snapshot, WindowInfo, diff_summary
 
 PROTECTED_PROCESSES = {"jarvis-hud.exe", "jarvis-hud"}
 MAX_ELEMENTS = 120
@@ -24,13 +24,15 @@ SAFE_KEYS = ({"enter", "tab", "esc", "escape", "backspace", "delete", "home", "e
 
 
 class GuiResult(str):
-    """Texto para el modelo con metadatos: `ok` (postcondición cumplida) e `image` (captura anotada para la siguiente llamada)."""
+    """Texto para el modelo con metadatos: `ok` (postcondición cumplida), `image` (captura anotada para la siguiente llamada)
+    y `recipe_args` (argumentos estables —por nombre, no por número— con los que esta llamada puede repetirse en una receta)."""
     ok: bool = True
     image: bytes | None = None
+    recipe_args: dict | None = None
 
-    def __new__(cls, text: str, ok: bool = True, image: bytes | None = None):
+    def __new__(cls, text: str, ok: bool = True, image: bytes | None = None, recipe_args: dict | None = None):
         o = super().__new__(cls, text)
-        o.ok, o.image = ok, image
+        o.ok, o.image, o.recipe_args = ok, image, recipe_args
         return o
 
 
@@ -99,6 +101,31 @@ class GuiTools:
             raise GuiError(f"el elemento {element_id} no existe en la última observación (#{self._snap.seq}); vuelve a observar")
         return el
 
+    def _target(self, id, name, role, nth) -> tuple[Element, dict]:
+        """Elemento por número (de la última observación) o por nombre/rol (estable entre ejecuciones: lo que usan las recetas).
+        Devuelve también los argumentos estables para registrar la llamada."""
+        if self._snap is None:
+            raise GuiError("no hay observación previa: usa gui.observe")
+        if name:
+            q = str(name).strip().lower()
+            cand = [e for e in self._snap.elements if (e.name or e.automation_id).strip().lower() == q and (not role or e.role == str(role).lower())]
+            if not cand:
+                raise GuiError(f'no hay ningún elemento "{name}"' + (f" de tipo {role}" if role else "") + " en la última observación")
+            if nth is None and len(cand) > 1:
+                raise GuiError(f'"{name}" es ambiguo ({len(cand)} coincidencias: ' + ", ".join(f"[{e.id}] {e.role}" for e in cand[:6]) + "); indica el número o nth")
+            idx = 0 if nth is None else int(nth)
+            if isinstance(nth, bool) or not 0 <= idx < len(cand):
+                raise GuiError(f"nth fuera de rango (0..{len(cand) - 1})")
+            el = cand[idx]
+        else:
+            el = self._element(id)
+        key = el.name or el.automation_id
+        same = [e for e in self._snap.elements if (e.name or e.automation_id) == key and e.role == el.role]
+        stable = {"name": key, "role": el.role} if key else {}
+        if key and len(same) > 1:
+            stable["nth"] = same.index(el)
+        return el, stable
+
     async def _after(self, action: str, el_id: int | None, before: Snapshot, ok: bool = True) -> GuiResult:
         await asyncio.sleep(self.settle)
         win = before.window
@@ -132,8 +159,8 @@ class GuiTools:
         await self._frame(snap, None, f"enfocar {w.title}")
         return GuiResult(f'Ventana "{w.title}" en primer plano.\n{snap.describe()}')
 
-    async def click(self, id: int) -> GuiResult:
-        el = self._element(id)
+    async def click(self, id: int | None = None, name: str = "", role: str = "", nth: int | None = None) -> GuiResult:
+        el, stable = self._target(id, name, role, nth)
         if not el.enabled:
             return GuiResult(f"El elemento {el.id} está deshabilitado.", False)
         if el.secret:
@@ -141,10 +168,12 @@ class GuiTools:
         before = self._snap
         await self._frame(before, el.id, f'clic en {el.id} "{el.name}"')
         method = await self._bk(self.backend.activate, before.seq, el.id)
-        return await self._after(f'Clic en {el.id} ({el.role} "{el.name[:40]}") mediante {method}', el.id, before)
+        res = await self._after(f'Clic en {el.id} ({el.role} "{el.name[:40]}") mediante {method}', el.id, before)
+        res.recipe_args = stable or None
+        return res
 
-    async def type(self, id: int, text: str, submit: bool = False) -> GuiResult:
-        el = self._element(id)
+    async def type(self, id: int | None = None, text: str = "", name: str = "", role: str = "", nth: int | None = None, submit: bool = False) -> GuiResult:
+        el, stable = self._target(id, name, role, nth)
         if el.secret:
             return GuiResult("Los campos de contraseña no son accesibles.", False)
         if el.role not in ("edit", "combobox", "document"):
@@ -159,6 +188,7 @@ class GuiTools:
         if submit:
             await self._bk(self.backend.press, "enter")
         res = await self._after(f'Escrito en {el.id} mediante {method}' + ("" if ok else f' (¡el campo contiene "{(got or "")[:60]}", no lo escrito!)'), el.id, before, ok)
+        res.recipe_args = ({**stable, "text": text, **({"submit": True} if submit else {})}) if stable else None
         return res
 
     async def press(self, keys: str) -> GuiResult:
@@ -191,17 +221,17 @@ class GuiTools:
         return await self._after(f"Clic en coordenadas ({int(x)},{int(y)})", None, before)
 
     def tools(self) -> list[Tool]:
-        def p(**f):
-            return {"type": "object", "properties": {k: {"type": t} for k, t in f.items()}, "required": [k for k in f if k not in ("submit", "image", "window")]}
+        def p(required=(), **f):
+            return {"type": "object", "properties": {k: {"type": t} for k, t in f.items()}, "required": [k for k in f if k in required]}
         R, W, D = ActionClass.READ, ActionClass.WRITE_REVERSIBLE, ActionClass.DESTRUCTIVE
         ver = lambda out: getattr(out, "ok", True)
         return [
             Tool("gui.windows", R, self.windows, "Lista las ventanas abiertas (la activa lleva *)", True),
             Tool("gui.observe", R, self.observe, "Observa una ventana (por parte del título; vacío = la activa) y numera sus elementos. image=true adjunta una captura con los números dibujados. Los números cambian en cada observación o acción: usa siempre los últimos", True,
                  parameters=p(window="string", image="boolean")),
-            Tool("gui.focus", W, self.focus, "Trae una ventana al primer plano y la observa", True, parameters=p(window="string")),
-            Tool("gui.click", W, self.click, "Pulsa el elemento con ese número (de la última observación). Devuelve la ventana tras la acción", True, verify=ver, parameters=p(id="integer")),
-            Tool("gui.type", W, self.type, "Escribe texto en el campo con ese número; submit=true pulsa Enter después", True, verify=ver, parameters=p(id="integer", text="string", submit="boolean")),
-            Tool("gui.press", W, self.press, "Pulsa una tecla o combinación segura (enter, tab, esc, flechas, ctrl+a/c/v/x/z/y/s/f, f1..f12…)", True, verify=ver, parameters=p(keys="string")),
-            Tool("gui.click_xy", D, self.click_xy, "ÚLTIMO RECURSO: clic en coordenadas de pantalla dentro de la ventana observada, solo si el elemento no aparece numerado", True, verify=ver, parameters=p(x="integer", y="integer")),
+            Tool("gui.focus", W, self.focus, "Trae una ventana al primer plano y la observa", True, parameters=p(("window",), window="string")),
+            Tool("gui.click", W, self.click, "Pulsa un elemento: por su número (id, de la última observación) o por name (+role, nth si hay varios iguales). Devuelve la ventana tras la acción", True, verify=ver, parameters=p(id="integer", name="string", role="string", nth="integer")),
+            Tool("gui.type", W, self.type, "Escribe texto en un campo (por id o por name/role); submit=true pulsa Enter después", True, verify=ver, parameters=p(("text",), text="string", id="integer", name="string", role="string", nth="integer", submit="boolean")),
+            Tool("gui.press", W, self.press, "Pulsa una tecla o combinación segura (enter, tab, esc, flechas, ctrl+a/c/v/x/z/y/s/f, f1..f12…)", True, verify=ver, parameters=p(("keys",), keys="string")),
+            Tool("gui.click_xy", D, self.click_xy, "ÚLTIMO RECURSO: clic en coordenadas de pantalla dentro de la ventana observada, solo si el elemento no aparece numerado", True, verify=ver, parameters=p(("x", "y"), x="integer", y="integer")),
         ]

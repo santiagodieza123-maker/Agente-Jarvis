@@ -10,6 +10,7 @@ from core.bus import EventBus
 from core.hud_config import ConfigHandlers
 from core.hud_extensions import ExtensionHandlers
 from core.hud_handlers import HudHandlers
+from core.hud_recipes import RecipeHandlers
 from core.hud_settings import SettingsHandlers
 from core.mcp_client import ExtensionManager
 from core.memory import Memory
@@ -106,6 +107,9 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
                         external_context=lambda: cfg.values["confirm_with_extensions"] and any(
                             n.startswith("mcp.") and n not in perms.disabled for n in tools))
 
+    handlers.extra.append(RecipeHandlers(bus, audit, memory, orch, handlers, tools, lambda n: n not in perms.disabled,
+                                         policy._path_allowed, settings.publish_memory))
+
     def apply(rebuild: bool) -> None:
         """Aplica en caliente los ajustes; rebuild=True recrea el proveedor (cambio de modelo o de clave)."""
         orch.max_steps, orch.max_failures = cfg.values["max_steps"], cfg.values["max_failures"]
@@ -132,7 +136,7 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
             final = await orch.run(goal)
         finally:
             config.publish()                      # refresca el consumo de tokens
-        memory.record_episode(goal, final["status"], final["steps"], final["answer"])
+        memory.record_episode(goal, final["status"], final["steps"], final["answer"], final["calls"], final["tainted"])
         settings.publish_memory()
 
     handlers.run_task = run_task

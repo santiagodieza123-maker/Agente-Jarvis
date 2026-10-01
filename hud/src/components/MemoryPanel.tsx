@@ -1,7 +1,58 @@
 import { useState } from "react";
-import type { HudMessage, MemorySnapshot } from "../events";
+import { parsePre, preToText, recipeParams, successRate } from "../recipes";
+import type { HudMessage, MemorySnapshot, Recipe } from "../events";
 
 const when = (ts: number) => new Date(ts * 1000).toLocaleString();
+
+function RecipeCard({ r, send }: { r: Recipe; send: (m: HudMessage) => void }) {
+  const names = recipeParams(r);
+  const [vals, setVals] = useState<Record<string, string>>({});                       // lo que el usuario ha editado
+  const valueOf = (n: string) => vals[n] ?? r.params[n] ?? "";                       // si no, el valor por defecto de la receta
+  const [pre, setPre] = useState(preToText(r.pre));
+  const [err, setErr] = useState("");
+  const [open, setOpen] = useState(false);
+  const savePre = () => { const p = parsePre(pre); if (!p.ok) { setErr(p.error); return; } setErr(""); send({ type: "recipes.set_preconditions", id: r.id, items: p.items }); };
+  return (
+    <li className="recipe" data-testid={`recipe-${r.name}`}>
+      <div className="row">
+        <strong className="grow">{r.name}</strong>
+        <em title="Ejecuciones correctas / totales">{successRate(r)}</em>
+        <button onClick={() => send({ type: "recipes.run", id: r.id, params: Object.fromEntries(names.map((n) => [n, valueOf(n)])) })} data-testid={`run-${r.name}`} title="Se repite sin llamar al modelo; cada paso pasa por la política y las confirmaciones">▶ Ejecutar</button>
+        <button className="deny small" onClick={() => { if (window.confirm(`¿Borrar la receta «${r.name}»?`)) send({ type: "recipes.delete", id: r.id }); }}>Borrar</button>
+      </div>
+      <p className="hint">Objetivo original: {r.goal}</p>
+      {r.tainted && <p className="danger">⚠ La tarea original leyó contenido no confiable: revisa los pasos antes de ejecutarla.</p>}
+      {r.last_error && <p className="warn" role="alert">Último fallo: {r.last_error}</p>}
+      {names.length > 0 && (
+        <div className="params">{names.map((n) => (
+          <label key={n}><span>{n}</span><input value={valueOf(n)} onChange={(e) => setVals({ ...vals, [n]: e.target.value })} data-testid={`param-${n}`} /></label>
+        ))}</div>
+      )}
+      <button className="small" onClick={() => setOpen(!open)}>{open ? "Ocultar pasos" : `Ver ${r.steps.length} pasos`}</button>
+      {open && (
+        <>
+          <ol className="steps">
+            {r.steps.map((st, i) => (
+              <li key={i}><code>{st.tool}</code>{" "}
+                {Object.entries(st.args).map(([k, v]) => (
+                  <span key={k} className="arg">{k}=<q>{typeof v === "string" ? v : JSON.stringify(v)}</q>
+                    {typeof v === "string" && !/^\{\{.*\}\}$/.test(v) && (
+                      <button className="small" title="Convertir este valor en un parámetro" onClick={() => { const n = window.prompt("Nombre del parámetro (a-z, 0-9, _):", k); if (n) send({ type: "recipes.param", id: r.id, step: i, arg: k, name: n.trim() }); }}>{"{}"}</button>
+                    )}
+                  </span>
+                ))}
+              </li>
+            ))}
+          </ol>
+          <label className="prebox"><span>Precondiciones (una por línea: «ruta: …» o «ventana: …»)</span>
+            <textarea rows={2} value={pre} onChange={(e) => setPre(e.target.value)} spellCheck={false} data-testid={`pre-${r.name}`} /></label>
+          {err && <p className="warn" role="alert">{err}</p>}
+          <button className="small" onClick={savePre}>Guardar precondiciones</button>
+        </>
+      )}
+    </li>
+  );
+}
 
 export function MemoryPanel({ memory, send }: { memory: MemorySnapshot | null; send: (m: HudMessage) => void }) {
   const [kind, setKind] = useState("preferencia");
@@ -42,6 +93,12 @@ export function MemoryPanel({ memory, send }: { memory: MemorySnapshot | null; s
         ))}
         {!memory.notes.length && <li className="empty">Sin notas</li>}
       </ul>
+      <h2 className="sub">RECETAS <span className="count">{(memory.recipes ?? []).length}</span></h2>
+      <p className="hint">Tareas que funcionaron, guardadas desde el historial. Se repiten sin llamar al modelo y no concede permisos: cada paso vuelve a pedir lo que pediría normalmente.</p>
+      <ul className="recipes">
+        {(memory.recipes ?? []).map((r) => <RecipeCard key={r.id} r={r} send={send} />)}
+        {!(memory.recipes ?? []).length && <li className="empty">Sin recetas: guarda una desde una tarea completada del historial</li>}
+      </ul>
       <h2 className="sub">HISTORIAL DE TAREAS
         {memory.episodes.length > 0 && <button className="deny small" onClick={() => send({ type: "memory.clear_episodes" })}>Limpiar</button>}
       </h2>
@@ -50,6 +107,8 @@ export function MemoryPanel({ memory, send }: { memory: MemorySnapshot | null; s
           <li key={e.id} data-testid="episode" title={e.answer}>
             <span className={`dot ${e.status === "done" ? "ok" : "failed"}`} />
             <span className="grow">{e.goal}</span><em>{e.steps} pasos · {when(e.ts)}</em>
+            {e.saveable && <button className="small" data-testid={`save-recipe-${e.id}`} title="Guardar las acciones de esta tarea para repetirla sin el modelo"
+              onClick={() => { const n = window.prompt("Nombre de la receta:", e.goal.slice(0, 40)); if (n) send({ type: "recipes.save", episode_id: e.id, name: n.trim() }); }}>Guardar receta</button>}
           </li>
         ))}
         {!memory.episodes.length && <li className="empty">Sin tareas todavía</li>}

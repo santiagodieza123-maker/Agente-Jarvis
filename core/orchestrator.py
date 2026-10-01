@@ -55,6 +55,7 @@ class State(TypedDict):
     steps: int
     tokens: int
     image: bytes | None
+    calls: list
     failures: int
     answer: str
     status: str   # running | done | aborted
@@ -94,11 +95,47 @@ class Orchestrator:
         self.audit.append("task.started", goal=goal)
         self.bus.publish("state.changed", {"state": "thinking"})
         init: State = {"goal": goal, "messages": [{"role": "user", "content": goal}], "pending": None,
-                       "tainted": False, "steps": 0, "tokens": 0, "image": None, "failures": 0, "answer": "", "status": "running"}
+                       "tainted": False, "steps": 0, "tokens": 0, "image": None, "calls": [], "failures": 0, "answer": "", "status": "running"}
         final = await self._graph.ainvoke(init, {"recursion_limit": 4 * self.max_steps + 10})
         self.audit.append("task.finished", status=final["status"], steps=final["steps"], tokens=final["tokens"])
         self.bus.publish("state.changed", {"state": "idle"})
         return final
+
+    async def replay(self, steps: list[dict], params: dict[str, str], label: str = "receta") -> dict:
+        """Ejecuta una receta SIN llamar al LLM. Cada paso pasa por la misma política, confirmaciones y verificación que en una tarea
+        normal (una receta no concede permisos). Se detiene en el primer fallo. Devuelve {ok, ran, failed_at, error, tainted}."""
+        from core.recipes import RecipeError, substitute
+        s: State = {"goal": label, "messages": [], "pending": None, "tainted": False, "steps": 0, "tokens": 0, "image": None, "calls": [],
+                    "failures": 0, "answer": "", "status": "running", "_last": None}
+        self.audit.append("recipe.started", label=label, steps=len(steps))
+        self.bus.publish("state.changed", {"state": "acting"})
+        out = {"ok": True, "ran": 0, "failed_at": None, "error": "", "tainted": False}
+        try:
+            for i, st in enumerate(steps, 1):
+                tool = self.tools.get(st["tool"])
+                if tool is None or not self.is_enabled(tool.name):
+                    out.update(ok=False, failed_at=i, error=f"la herramienta {st['tool']} no está disponible")
+                    break
+                try:
+                    args = substitute(st["args"], params)
+                except RecipeError as e:
+                    out.update(ok=False, failed_at=i, error=str(e))
+                    break
+                self.bus.publish("plan.updated", {"text": f"{label}: paso {i}/{len(steps)} · {tool.name}", "next": tool.name})
+                before = s["failures"]
+                s["pending"] = ToolCall(tool.name, args)
+                s.update(await self._act(s))
+                s.update(await self._verify(s))
+                out["ran"] = i
+                if s["failures"] > before:
+                    last = next((m["content"] for m in reversed(s["messages"]) if m["role"] == "tool"), "")
+                    out.update(ok=False, failed_at=i, error=str(last)[:300])
+                    break
+        finally:
+            out["tainted"] = s["tainted"]
+            self.audit.append("recipe.finished", label=label, ok=out["ok"], ran=out["ran"], failed_at=out["failed_at"])
+            self.bus.publish("state.changed", {"state": "idle"})
+        return out
 
     async def _plan(self, s: State) -> dict:
         if s["steps"] >= self.max_steps:
@@ -173,7 +210,9 @@ class Orchestrator:
             ok, err = True, ""
         except Exception as e:  # el fallo vuelve al planificador, no tumba la tarea
             out, ok, err = None, False, f"{type(e).__name__}: {e}"
-        return {"steps": steps, "pending": None, "image": getattr(out, "image", None) if ok else None,
+        rec = getattr(out, "recipe_args", None) if ok else None
+        calls = s["calls"] + ([{"tool": tool.name, "args": rec or call.args, "ok": True}] if ok else [])    # para guardarlo como receta
+        return {"steps": steps, "pending": None, "image": getattr(out, "image", None) if ok else None, "calls": calls,
                 "tainted": s["tainted"] or (tool.untrusted_output and ok),
                 "failures": s["failures"] + (0 if ok else 1),
                 "messages": self._record(s, str(out) if ok else f"error: {err}", tool.untrusted_output and ok, name=call.name),

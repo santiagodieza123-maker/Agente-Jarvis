@@ -45,6 +45,22 @@ class HudHandlers:
             return
         self._task = asyncio.create_task(self._guarded(goal))
 
+    async def start_job(self, label: str, make_coro) -> bool:
+        """Ejecuta un trabajo exclusivo (p. ej. una receta) en el mismo hueco que las tareas: solo uno a la vez."""
+        if self._task and not self._task.done():
+            self.bus.publish("ui.notice", {"level": "error", "text": "Ya hay una tarea en curso; espera a que termine."})
+            return False
+        self._task = asyncio.create_task(self._guarded_job(label, make_coro))
+        return True
+
+    async def _guarded_job(self, label: str, make_coro) -> None:
+        try:
+            await make_coro()
+        except Exception as e:  # noqa: BLE001
+            self.audit.append("task.crashed", error=f"{type(e).__name__}: {e}", label=label)
+            self.bus.publish("plan.updated", {"text": f"{label} falló: {type(e).__name__}: {str(e)[:200]}"})
+            self.bus.publish("state.changed", {"state": "idle"})
+
     async def _guarded(self, goal: str) -> None:
         try:
             await self.run_task(goal)

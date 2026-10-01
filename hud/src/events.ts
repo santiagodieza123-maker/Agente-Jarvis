@@ -49,13 +49,21 @@ export type HudMessage =
   | { type: "extensions.restart"; name: string }
   | { type: "extensions.set_trust"; name: string; tool: string; read: boolean }
   | { type: "extensions.set_tool"; name: string; tool: string; enabled: boolean }
+  | { type: "recipes.save"; episode_id: number; name: string }
+  | { type: "recipes.delete"; id: number }
+  | { type: "recipes.param"; id: number; step: number; arg: string; name: string }
+  | { type: "recipes.set_preconditions"; id: number; items: Precondition[] }
+  | { type: "recipes.run"; id: number; params?: Record<string, string> }
   | { type: "audit.get"; limit?: number; event?: string; text?: string }
   | { type: "audit.export"; event?: string; text?: string }
   | { type: "audit.verify" };
 
 export interface Note { id: number; kind: string; content: string; updated: number }
-export interface Episode { id: number; ts: number; goal: string; status: string; steps: number; answer: string }
-export interface MemorySnapshot { notes: Note[]; episodes: Episode[]; kinds: string[]; limits: { content: number; notes: number } }
+export interface Episode { id: number; ts: number; goal: string; status: string; steps: number; answer: string; saveable?: boolean }
+export type Precondition = { type: "path_exists"; path: string } | { type: "window_contains"; text: string };
+export interface RecipeStep { tool: string; args: Record<string, unknown> }
+export interface Recipe { id: number; name: string; goal: string; steps: RecipeStep[]; params: Record<string, string>; pre: Precondition[]; tainted: boolean; runs: number; ok_runs: number; last_run: number | null; last_error: string }
+export interface MemorySnapshot { notes: Note[]; episodes: Episode[]; kinds: string[]; recipes?: Recipe[]; limits: { content: number; notes: number } }
 export interface PermClass { name: string; confirm: boolean; locked: boolean }
 export interface PermTool { name: string; cls: string; enabled: boolean; description: string }
 export interface PermissionsSnapshot { classes: PermClass[]; tools: PermTool[]; roots: string[] }
