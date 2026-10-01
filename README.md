@@ -87,8 +87,9 @@ un proceso Medium lo pulse), 6 operaciones/min como máximo, y todo se registra.
 existe solo para pruebas y no se usa nunca desde el HUD. Fuera de alcance: el escritorio seguro (UAC, Ctrl+Alt+Supr).
 
 ## Límites conocidos
-- **Sin comprobar en hardware real:** varios monitores y escalado 125/150 %, integridad Medium real, `winget` y servicios reales con el broker, y la pulsación humana del
-  cuadro de confirmación (CI valida el pipe, la ACL, el protocolo y los indicadores del diálogo, pero no hay persona que lo acepte).
+- **Comprobado en hardware real** (Windows 11, 1 monitor 1920×1080 al 100 %, integridad Medium): clic exacto con SendInput, watchdog, shell, WebSocket y navegador.
+  Solo se soporta/valida un monitor; varios monitores y escalado 125/150 % no están verificados.
+- **Broker comprobado con una persona** (UAC, `ping`, `winget_install` real, `service_control` sobre Spooler, y denegación: al pulsar «No» no se ejecuta nada).
 - La percepción se basa en UI Automation: aplicaciones sin árbol de accesibilidad (juegos, lienzos, algunos Electron) solo se manejan con `gui.click_xy` sobre captura;
   no hay detección visual de elementos (OmniParser no está integrado).
 - El audio de la voz sale hacia Google; la escucha continua depende de la calidad del micrófono y de la transcripción.
