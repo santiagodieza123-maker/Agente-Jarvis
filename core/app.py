@@ -11,6 +11,7 @@ from core.hud_config import ConfigHandlers
 from core.hud_extensions import ExtensionHandlers
 from core.hud_handlers import HudHandlers
 from core.hud_recipes import RecipeHandlers
+from core.hud_voice import VoiceHandlers
 from core.hud_settings import SettingsHandlers
 from core.mcp_client import ExtensionManager
 from core.memory import Memory
@@ -124,6 +125,7 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
                   for e in manager.exts.values()]
         return comps
     handlers.components = components
+    handlers.extra.append(VoiceHandlers(bus, audit, holder))
     handlers.extra.append(RecipeHandlers(bus, audit, memory, orch, handlers, tools, lambda n: n not in perms.disabled,
                                          policy._path_allowed, settings.publish_memory))
 

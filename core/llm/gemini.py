@@ -93,14 +93,8 @@ class GeminiProvider(LLMProvider):
                 push("user", {"text": m["content"]})
         return out
 
-    def generate(self, system, messages, tools, image_png=None) -> LLMResponse:
-        contents = self._contents(messages)
-        if image_png:
-            import base64
-            contents[-1]["parts"].append({"inline_data": {"mime_type": "image/png", "data": base64.b64encode(image_png).decode()}})
-        body: dict = {"systemInstruction": {"parts": [{"text": system}]}, "contents": contents}
-        if tools:
-            body["tools"] = [{"functionDeclarations": tools}]
+    def _request(self, body: dict) -> dict:
+        """POST a generateContent con reintentos (5xx/red) y espera de cuota (429)."""
         url = f"{BASE}/models/{self.model}:generateContent"
         headers = {"Content-Type": "application/json", "x-goog-api-key": self._key}
 
@@ -127,6 +121,17 @@ class GeminiProvider(LLMProvider):
                     self.on_wait(2 ** attempt, "red o servidor")
                 self._sleep(2 ** attempt)
                 attempt += 1
+        return data
+
+    def generate(self, system, messages, tools, image_png=None) -> LLMResponse:
+        contents = self._contents(messages)
+        if image_png:
+            import base64
+            contents[-1]["parts"].append({"inline_data": {"mime_type": "image/png", "data": base64.b64encode(image_png).decode()}})
+        body: dict = {"systemInstruction": {"parts": [{"text": system}]}, "contents": contents}
+        if tools:
+            body["tools"] = [{"functionDeclarations": tools}]
+        data = self._request(body)
 
         cands = data.get("candidates") or []
         if not cands:
@@ -140,3 +145,19 @@ class GeminiProvider(LLMProvider):
                 text.append(part["text"])
         u = data.get("usageMetadata", {})
         return LLMResponse("".join(text), calls, u.get("promptTokenCount", 0), u.get("candidatesTokenCount", 0))
+
+    TRANSCRIBE_PROMPT = ("Transcribe literalmente este audio. Devuelve SOLO la transcripción, sin comentarios, comillas ni etiquetas. "
+                         "Si no hay voz inteligible, devuelve exactamente: [silencio]")
+
+    def transcribe(self, audio: bytes, mime: str) -> LLMResponse:
+        """Voz a texto con Gemini (audio en línea). El texto transcrito es una entrada del usuario, igual que si la hubiera escrito."""
+        import base64
+        body = {"contents": [{"role": "user", "parts": [{"text": self.TRANSCRIBE_PROMPT},
+                                                        {"inline_data": {"mime_type": mime, "data": base64.b64encode(audio).decode()}}]}]}
+        data = self._request(body)
+        cands = data.get("candidates") or []
+        if not cands:
+            raise LLMError(f"transcripción sin resultado: {data.get('promptFeedback', {})}")
+        text = "".join(p.get("text", "") for p in cands[0].get("content", {}).get("parts", []) if not p.get("thought"))
+        u = data.get("usageMetadata", {})
+        return LLMResponse(text.strip(), [], u.get("promptTokenCount", 0), u.get("candidatesTokenCount", 0))

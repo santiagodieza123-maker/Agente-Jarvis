@@ -16,6 +16,9 @@ from core.bus import EventBus
 DEFAULT_ORIGINS = frozenset({"tauri://localhost", "http://tauri.localhost", "http://localhost:1420"})
 
 
+MAX_MESSAGE = 8 * 1024 * 1024        # 1 MiB por defecto no basta para un fragmento de voz; sigue acotado y exige token
+
+
 class HudServer:
     def __init__(self, bus: EventBus, token: str | None = None,
                  allowed_origins=DEFAULT_ORIGINS, port: int = 0, on_message=None, on_connect=None):
@@ -66,7 +69,7 @@ class HudServer:
 
     async def start(self) -> int:
         self._server = await serve(self._handler, "127.0.0.1", self.port,
-                                   process_request=self._authorize)
+                                   process_request=self._authorize, max_size=MAX_MESSAGE)
         self.port = self._server.sockets[0].getsockname()[1]
         return self.port
 

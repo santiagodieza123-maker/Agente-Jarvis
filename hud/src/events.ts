@@ -2,7 +2,7 @@
 export const EVENT_TYPES = [
   "plan.updated", "action.started", "action.finished", "perception.frame",
   "approval.requested", "approval.granted", "approval.denied",
-  "memory.changed", "permissions.changed", "config.changed", "extensions.changed", "system.stats", "audit.changed", "audit.appended", "audit.verified", "ui.notice", "state.changed", "kill.triggered",
+  "memory.changed", "permissions.changed", "config.changed", "extensions.changed", "system.stats", "voice.transcript", "audit.changed", "audit.appended", "audit.verified", "ui.notice", "state.changed", "kill.triggered",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -54,6 +54,7 @@ export type HudMessage =
   | { type: "recipes.param"; id: number; step: number; arg: string; name: string }
   | { type: "recipes.set_preconditions"; id: number; items: Precondition[] }
   | { type: "recipes.run"; id: number; params?: Record<string, string> }
+  | { type: "voice.transcribe"; id: string; mime: string; audio: string }
   | { type: "audit.get"; limit?: number; event?: string; text?: string }
   | { type: "audit.export"; event?: string; text?: string }
   | { type: "audit.verify" };

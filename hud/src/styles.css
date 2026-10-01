@@ -98,3 +98,6 @@ nav { flex-wrap: wrap; } nav button { flex: 1 1 auto; padding-inline: 6px; }
 .hud.compact .tabs, .hud.compact .timeline { display: none; } .hud.compact header > span:first-child { letter-spacing: .2em; font-size: .8rem; } .hud.compact .status { display: none; }
 .hud.compact .approvals { inset: auto 8px 8px 8px; max-width: none; } .hud.compact header { padding-bottom: 4px; }
 header .status { flex: 1; text-align: center; } .compactbtn { margin-left: 0; }
+.voicebar { display: grid; gap: 4px; font-size: .78rem; } .voicebar .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; } .voicebar label { display: flex; gap: 5px; align-items: center; } .voicebar input[type=checkbox], .voicebar input[type=range] { width: auto; }
+.voicebar .rec, .micbtn.rec { background: #5a0f0f; color: #fff; border-color: #ff3b3b; animation: recpulse 1.2s infinite; } .recdot { color: #ff5a5a; } .micbtn { padding: 2px 8px; margin-right: 6px; letter-spacing: 0; }
+@keyframes recpulse { 50% { box-shadow: 0 0 10px #ff3b3b; } } .voicebar .hint { margin: 0; opacity: .6; font-size: .7rem; }

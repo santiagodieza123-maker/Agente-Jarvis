@@ -43,3 +43,25 @@ class LLMHolder(LLMProvider):
     def usage(self) -> dict:
         u = {"calls": self.calls, "input": self.input_tokens, "output": self.output_tokens}        # de la sesión
         return {**u, **self.store.snapshot()} if self.store is not None else u
+
+    def transcribe(self, audio: bytes, mime: str) -> LLMResponse:
+        inner = self.inner
+        if inner is None:
+            raise NoLLM("sin clave de API configurada")
+        if not hasattr(inner, "transcribe"):
+            raise NoLLM("el proveedor actual no transcribe voz")
+        if hasattr(inner, "on_wait"):
+            inner.on_wait = self.on_wait
+        t0 = time.perf_counter()
+        try:
+            r = inner.transcribe(audio, mime)
+        except Exception:
+            self.errors += 1
+            raise
+        self.latencies.append((time.perf_counter() - t0) * 1000)
+        self.calls += 1
+        self.input_tokens += r.input_tokens
+        self.output_tokens += r.output_tokens
+        if self.store is not None:
+            self.store.add(r.input_tokens, r.output_tokens)
+        return r

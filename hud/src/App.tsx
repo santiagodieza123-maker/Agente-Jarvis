@@ -7,6 +7,8 @@ import { ExtensionsPanel } from "./components/ExtensionsPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { Orb } from "./components/Orb";
 import { PermissionsPanel } from "./components/PermissionsPanel";
+import { VoiceBar } from "./components/VoiceBar";
+import { useVoice } from "./voice/useVoice";
 import { VisionPanel } from "./components/VisionPanel";
 import { SystemPanel } from "./components/SystemPanel";
 import { Timeline } from "./components/Timeline";
@@ -34,6 +36,15 @@ export default function App() {
     }
   };
 
+  // Solo se habla la respuesta final (cuando el agente vuelve a reposo), no los avisos intermedios («paso 2/5», «esperando cuota»…)
+  const lastMsg = state.chat[state.chat.length - 1];
+  const lastAnswer = state.agent === "idle" && lastMsg?.who === "jarvis" ? { text: lastMsg.text, key: state.chat.length } : null;
+  const voice = useVoice({ send, onText: submitTask, transcript: state.transcript, lastAnswer });
+  useEffect(() => {                                              // Ctrl+Espacio: hablar / enviar, sin tocar el ratón
+    const h = (e: KeyboardEvent) => { if (e.ctrlKey && e.code === "Space" && !e.repeat) { e.preventDefault(); voice.togglePtt(); } };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [voice.togglePtt]);                                         // eslint-disable-line react-hooks/exhaustive-deps
   const accent = state.config?.values.accent;
   useEffect(() => { applyTheme(accent); }, [accent]);
 
@@ -48,11 +59,12 @@ export default function App() {
       <header data-tauri-drag-region>
         <span data-tauri-drag-region>J.A.R.V.I.S.</span>
         <span className="status" data-tauri-drag-region>{state.conn === "open" || state.agent === "killed" ? state.agent.toUpperCase() : state.conn.toUpperCase()}</span>
+        {voice.supported && <button className={`micbtn${voice.ptt || voice.wake ? " rec" : ""}`} onClick={voice.togglePtt} title="Hablar (Ctrl+Espacio)" aria-label="Hablar" data-testid="mic-header">🎙</button>}
         <button className="compactbtn" onClick={toggleCompact} title={compact ? "Expandir el HUD" : "Modo compacto: solo el reactor"} aria-label="Modo compacto" data-testid="compact-toggle">{compact ? "⤢" : "⤡"}</button>
         <button className="panic" onClick={() => send({ type: "panic" })} title="Detiene al agente y a sus procesos hijos">PÁNICO</button>
         <WindowControls needsInput={state.approvals.length > 0} />
       </header>
-      <div className="orb"><Orb state={state.agent} theme={accent} compact={compact} /></div>
+      <div className="orb"><Orb state={state.agent} theme={accent} compact={compact} level={voice.level} /></div>
       {compact && <p className="compact-status" data-testid="compact-status">{state.plan || (state.conn === "open" ? "Listo" : "Sin conexión")}</p>}
       <div className="tabs">
         <nav role="tablist">
@@ -61,6 +73,7 @@ export default function App() {
           ))}
         </nav>
         {state.notice && <div className={`notice ${state.notice.level}`} role="status" data-testid="notice">{state.notice.text}</div>}
+        {tab === "consola" && <VoiceBar voice={voice} />}
         {tab === "consola" && <Console chat={state.chat} disabled={state.conn !== "open"} onSubmit={submitTask} />}
         {tab === "memoria" && <MemoryPanel memory={state.memory} send={send} />}
         {tab === "permisos" && <PermissionsPanel perms={state.permissions} send={send} />}
