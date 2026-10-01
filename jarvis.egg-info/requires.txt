@@ -1,0 +1,15 @@
+pydantic>=2
+websockets>=13
+langgraph>=1.0
+
+[dev]
+pytest
+
+[web]
+playwright>=1.56
+
+[windows]
+mss
+uiautomation
+comtypes
+keyring

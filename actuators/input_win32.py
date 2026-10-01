@@ -56,3 +56,17 @@ def click(x: int, y: int) -> None:
         i.mi = MOUSEINPUT(nx, ny, 0, ABSOLUTE | VIRTUALDESK | f, 0, 0)
         evs.append(i)
     _send(evs)
+
+
+INPUT_KEYBOARD, KEYEVENTF_KEYUP = 1, 0x0002
+
+
+def hotkey(*vks: int) -> None:
+    """Pulsa y suelta una combinación (códigos de tecla virtual), en una sola llamada a SendInput."""
+    evs = []
+    for flags, keys in ((0, vks), (KEYEVENTF_KEYUP, reversed(vks))):
+        for vk in keys:
+            i = INPUT(type=INPUT_KEYBOARD)
+            i.ki = KEYBDINPUT(vk, 0, flags, 0, 0)
+            evs.append(i)
+    _send(evs)

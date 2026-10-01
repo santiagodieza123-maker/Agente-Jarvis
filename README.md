@@ -27,3 +27,13 @@ Modelo por defecto `gemini-3.1-flash-lite`; cámbialo con `JARVIS_GEMINI_MODEL`.
 visible con `JARVIS_BROWSER_HEADED=1`. Bloquea localhost, redes privadas, metadatos cloud y esquemas no http(s), incluso tras redirecciones.
 Límite conocido: DNS rebinding entre la comprobación y la conexión no está cubierto. `shell.exec` pide aprobación cada vez y no hereda
 variables con KEY/TOKEN/SECRET/PASSWORD en el nombre.
+
+## Verificación en Windows
+Lo que no se puede ejecutar en Linux (clics en varios monitores, watchdog, PowerShell, WebView2) se prueba con un script.
+En una terminal **normal** (no elevada), desde la raíz del repo:
+
+    py -3.11 -m venv .venv ; .venv\Scripts\activate
+    pip install -e ".[web]" ; playwright install chromium
+    python tools/verify_windows.py
+
+Tarda ~40 s y mueve el cursor: no toques mouse ni teclado. Genera `verify_report.txt` (y `.json`), sin claves ni variables de entorno.

@@ -1,4 +1,7 @@
-"""Watchdog independiente (solo Windows). Lanza al agente en un Job Object y lo mata con Ctrl+Shift+F10."""
+"""Watchdog independiente (solo Windows). Lanza al agente en un Job Object y lo mata con Ctrl+Shift+F10.
+
+Uso: python watchdog/watchdog.py [comando del agente...]   (por defecto: python -m core.main)
+"""
 import ctypes
 import ctypes.wintypes as wt
 import subprocess
@@ -16,7 +19,7 @@ k32.TerminateJobObject.argtypes = [wt.HANDLE, wt.UINT]
 
 MOD_CONTROL, MOD_SHIFT, MOD_NOREPEAT = 0x0002, 0x0004, 0x4000
 VK_F10 = 0x79
-WM_QUIT, WM_HOTKEY = 0x0012, 0x0312
+WM_QUIT, WM_HOTKEY, WM_USER, PM_NOREMOVE = 0x0012, 0x0312, 0x0400, 0x0000
 KILL_ON_JOB_CLOSE = 0x2000
 
 
@@ -50,12 +53,16 @@ def main() -> int:
     info.Basic.LimitFlags = KILL_ON_JOB_CLOSE
     k32.SetInformationJobObject(job, 9, ctypes.byref(info), ctypes.sizeof(info))
 
-    agent = subprocess.Popen([sys.executable, "-m", "core.main"])
+    agent = subprocess.Popen(sys.argv[1:] or [sys.executable, "-m", "core.main"])
     hproc = k32.OpenProcess(0x0100 | 0x0001, False, agent.pid)  # SET_QUOTA | TERMINATE
     if not k32.AssignProcessToJobObject(job, hproc):
         agent.kill()
         raise ctypes.WinError(ctypes.get_last_error())
 
+    # Fuerza la creación de la cola de mensajes de este hilo ANTES de lanzar el hilo que le enviará WM_QUIT:
+    # PostThreadMessageW falla (y el mensaje se pierde) si el destino aún no tiene cola, p. ej. si el agente
+    # termina enseguida; el watchdog quedaría colgado para siempre.
+    u32.PeekMessageW(ctypes.byref(wt.MSG()), None, WM_USER, WM_USER, PM_NOREMOVE)
     tid = k32.GetCurrentThreadId()
     threading.Thread(
         target=lambda: (agent.wait(), u32.PostThreadMessageW(tid, WM_QUIT, 0, 0)), daemon=True
