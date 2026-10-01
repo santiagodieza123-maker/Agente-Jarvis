@@ -1,9 +1,30 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::io::{BufRead, IsTerminal};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
-use tauri::{WebviewUrl, WebviewWindowBuilder};
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+
+/// Estado del modo click-through (el ratón atraviesa la ventana). Se puede salir de él con Ctrl+Shift+F9 aunque la
+/// ventana no reciba clics, y el HUD lo desactiva solo cuando hay una aprobación pendiente.
+struct ClickThrough(AtomicBool);
+
+fn apply_click_through(app: &tauri::AppHandle, enabled: bool) {
+    if let Some(w) = app.get_webview_window("main") {
+        if w.set_ignore_cursor_events(enabled).is_ok() {
+            app.state::<ClickThrough>().0.store(enabled, Ordering::SeqCst);
+            let _ = app.emit("click-through", enabled);
+        }
+    }
+}
+
+#[tauri::command]
+fn set_click_through(app: tauri::AppHandle, enabled: bool) {
+    apply_click_through(&app, enabled);
+}
+
 
 /// Script que expone al HUD el puerto y el token que el lanzador entregó por entorno.
 /// Se serializa con serde_json: el token nunca se interpola como código.
@@ -42,7 +63,23 @@ fn connection_from_stdin() -> Option<(String, String)> {
 
 fn main() {
     tauri::Builder::default()
+        .manage(ClickThrough(AtomicBool::new(false)))
+        .invoke_handler(tauri::generate_handler![set_click_through])
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state() == ShortcutState::Pressed {
+                        let now = app.state::<ClickThrough>().0.load(Ordering::SeqCst);
+                        apply_click_through(app, !now);
+                    }
+                })
+                .build(),
+        )
         .setup(|app| {
+            let toggle = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::F9);
+            if let Err(e) = app.global_shortcut().register(toggle) {
+                eprintln!("no se pudo registrar Ctrl+Shift+F9 (click-through): {e}");   // otra app lo usa; el HUD sigue funcionando
+            }
             // Prioridad: stdin (lanzador); como alternativa manual, las variables JARVIS_PORT / JARVIS_TOKEN.
             let (port, token) = match connection_from_stdin() {
                 Some((p, t)) => (Some(p), Some(t)),

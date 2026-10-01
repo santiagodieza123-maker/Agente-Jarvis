@@ -34,7 +34,7 @@ export default function App() {
         <span data-tauri-drag-region>J.A.R.V.I.S.</span>
         <span className="status" data-tauri-drag-region>{state.conn === "open" || state.agent === "killed" ? state.agent.toUpperCase() : state.conn.toUpperCase()}</span>
         <button className="panic" onClick={() => send({ type: "panic" })} title="Detiene al agente y a sus procesos hijos">PÁNICO</button>
-        <WindowControls />
+        <WindowControls needsInput={state.approvals.length > 0} />
       </header>
       <div className="orb"><Orb state={state.agent} /></div>
       <div className="tabs">
