@@ -9,3 +9,8 @@ audit/*.jsonl
 .env
 
 hud/src-tauri/gen/
+
+eval_report.md
+eval_report.json
+verify_report.txt
+verify_report.json
