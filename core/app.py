@@ -43,5 +43,9 @@ def wire(llm: LLMProvider | None, bus: EventBus, audit: AuditLog, roots: list[Pa
 
 
 def load_llm() -> LLMProvider | None:
-    """Proveedor LLM configurado. Pendiente: implementación Gemini (requiere clave y verificar el ID del modelo)."""
-    return None
+    """Gemini si hay GEMINI_API_KEY (env o .env); modelo sobreescribible con JARVIS_GEMINI_MODEL."""
+    key = os.environ.get("GEMINI_API_KEY")
+    if not key:
+        return None
+    from core.llm.gemini import DEFAULT_MODEL, GeminiProvider
+    return GeminiProvider(key, os.environ.get("JARVIS_GEMINI_MODEL", DEFAULT_MODEL))

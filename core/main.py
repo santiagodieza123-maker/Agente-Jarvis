@@ -3,12 +3,14 @@ import asyncio
 import sys
 
 from core.audit import AuditLog
+from core.env import load_dotenv
 from core.bus import EventBus
 from core.app import load_llm, wire, workspace_roots
 from core.server import HudServer
 
 
 async def run() -> None:
+    load_dotenv()
     bus = EventBus()
     audit = AuditLog("audit/audit.jsonl")
     handlers = wire(load_llm(), bus, audit, workspace_roots())

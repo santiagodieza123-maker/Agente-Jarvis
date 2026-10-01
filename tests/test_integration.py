@@ -118,7 +118,7 @@ def test_symlink_escape_blocked_even_if_approved(tmp_path):
 
     async def hud(ws, events):
         await ws.send(json.dumps({"type": "task", "goal": "lee"}))
-        await pump_until(ws, events, lambda e: e["type"] == "action.finished")
+        await pump_until(ws, events, lambda e: e["type"] == "state.changed" and e["payload"].get("state") == "idle")
 
     llm = Scripted(call("fs.read", path=str(ws_dir / "enlace")), LLMResponse(text="x"))
     events, _ = asyncio.run(session(tmp_path, llm, hud))

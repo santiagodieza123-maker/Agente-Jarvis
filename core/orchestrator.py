@@ -6,6 +6,7 @@ las acciones siguientes se evalúan con Origin.OBSERVED hasta que termine la tar
 """
 from __future__ import annotations
 
+import asyncio
 import inspect
 import uuid
 from dataclasses import dataclass, field
@@ -33,9 +34,13 @@ class Tool:
     untrusted_output: bool = False
     path_arg: str | None = None                   # argumento que contiene una ruta, para la política
     verify: Callable[[Any], bool] | None = None   # postcondición declarada
+    parameters: dict | None = None                # JSON Schema (subconjunto OpenAPI) de los argumentos
 
     def schema(self) -> dict:
-        return {"name": self.name, "description": self.description}
+        d = {"name": self.name, "description": self.description}
+        if self.parameters:
+            d["parameters"] = self.parameters
+        return d
 
 
 Approver = Callable[[str, Action, dict], Awaitable[bool]]  # (approval_id, action, args)
@@ -90,11 +95,13 @@ class Orchestrator:
         if s["steps"] >= self.max_steps:
             self.audit.append("task.aborted", reason="max_steps")
             return {"status": "aborted", "answer": "Límite de pasos alcanzado."}
-        r = self.llm.generate(SYSTEM, s["messages"], [t.schema() for t in self.tools.values()])
+        r = await asyncio.to_thread(self.llm.generate, SYSTEM, s["messages"], [t.schema() for t in self.tools.values()])
         self.bus.publish("plan.updated", {"text": r.text, "next": r.tool_calls[0].name if r.tool_calls else None})
         if not r.tool_calls:
             return {"status": "done", "answer": r.text}
-        return {"pending": r.tool_calls[0]}
+        call = r.tool_calls[0]
+        return {"pending": call,
+                "messages": s["messages"] + [{"role": "assistant", "content": f"[llamada a herramienta] {call.name}({call.args})"}]}
 
     def _record(self, s: State, content: str, untrusted: bool = False) -> list[dict]:
         if untrusted:

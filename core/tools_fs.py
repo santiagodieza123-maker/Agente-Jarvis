@@ -37,11 +37,15 @@ class FsTools:
         p.unlink()
         return f"borrado {p}"
 
+    @staticmethod
+    def _params(*fields: str) -> dict:
+        return {"type": "object", "properties": {f: {"type": "string"} for f in fields}, "required": list(fields)}
+
     def tools(self) -> list[Tool]:
         # El contenido de archivos puede venir de terceros: salida marcada como no confiable.
         return [
-            Tool("fs.read", ActionClass.READ, self.read, "Lee un archivo de texto (path)", True, "path"),
-            Tool("fs.list", ActionClass.READ, self.list, "Lista un directorio (path)", True, "path"),
-            Tool("fs.write", ActionClass.WRITE_REVERSIBLE, self.write, "Escribe un archivo (path, content)", False, "path"),
-            Tool("fs.delete", ActionClass.DESTRUCTIVE, self.delete, "Borra un archivo (path)", False, "path"),
+            Tool("fs.read", ActionClass.READ, self.read, "Lee un archivo de texto (path)", True, "path", parameters=self._params("path")),
+            Tool("fs.list", ActionClass.READ, self.list, "Lista un directorio (path)", True, "path", parameters=self._params("path")),
+            Tool("fs.write", ActionClass.WRITE_REVERSIBLE, self.write, "Escribe un archivo (path, content)", False, "path", parameters=self._params("path", "content")),
+            Tool("fs.delete", ActionClass.DESTRUCTIVE, self.delete, "Borra un archivo (path)", False, "path", parameters=self._params("path")),
         ]
