@@ -84,7 +84,9 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
     web = WebTools(os.environ.get("JARVIS_BROWSER_PROFILE", str(home / "browser-profile")),
                    headless=not cfg.values["browser_headed"])   # perfil dedicado, nunca el del usuario
     gui = default_gui_backend() if gui_backend is AUTO_GUI else gui_backend
-    gui_tools = GuiTools(gui, on_frame=lambda f: bus.publish("perception.frame", f)).tools() if gui is not None else []
+    from perception import omniparser
+    vision = omniparser.OmniParser(home / "models" / "omniparser") if gui is not None and omniparser.available() else None
+    gui_tools = GuiTools(gui, on_frame=lambda f: bus.publish("perception.frame", f), vision=vision).tools() if gui is not None else []
     broker = (BrokerClient(home) if os.name == "nt" else None) if broker_client is AUTO_BROKER else broker_client
     elevated_tools = ElevatedTools(broker).tools() if broker is not None else []
     tools = {t.name: t for t in (*fs.tools(), *shell.tools(), *web.tools(), *gui_tools, *elevated_tools)}
@@ -127,6 +129,8 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
                  {"name": "modelo", "state": "ok" if holder.inner is not None else "sin clave", "detail": getattr(holder.inner, "model", "")},
                  {"name": "navegador", "state": "ok" if web._page is not None else "inactivo", "detail": "perfil propio · proxy de salida"},
                  {"name": "UI Automation", "state": "ok" if gui is not None else "no disponible", "detail": "" if gui is not None else "solo en Windows con uiautomation"}]
+        comps.append({"name": "voz", "state": "ok" if config.voice_local_ready or not cfg.values["voice_local"] else "aviso",
+                      "detail": ("Whisper local" if config.voice_local_ready else "Whisper no instalado: se usa Google") if cfg.values["voice_local"] else "Google (Gemini)"})
         try:
             parent = psutil.Process(os.getpid()).parent()
             under = parent is not None and any("watchdog" in a for a in parent.cmdline())
@@ -137,7 +141,9 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
                   for e in manager.exts.values()]
         return comps
     handlers.components = components
-    handlers.extra.append(VoiceHandlers(bus, audit, holder))
+    from core import stt_local
+    handlers.extra.append(VoiceHandlers(bus, audit, holder, local=stt_local.LocalWhisper() if stt_local.available() else None,
+                                        use_local=lambda: cfg.values["voice_local"]))
     handlers.extra.append(BrokerHandlers(bus, audit, broker, home, broker_launch))
     handlers.extra.append(RecipeHandlers(bus, audit, memory, orch, handlers, tools, lambda n: n not in perms.disabled,
                                          policy._path_allowed, settings.publish_memory))
@@ -151,6 +157,7 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
 
     config = ConfigHandlers(bus, audit, cfg, SecretStore(home / "secrets.json"), holder, apply)
     handlers.extra.append(config)
+    config.voice_local_ready = stt_local.available()
     handlers.config = config
     orch.max_steps, orch.max_failures, orch.token_budget = cfg.values["max_steps"], cfg.values["max_failures"], cfg.values["token_budget"]
     if llm is FROM_CONFIG:

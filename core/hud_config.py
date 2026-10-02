@@ -18,6 +18,7 @@ class ConfigHandlers:
                  apply: Callable[[bool], None], env_key: Callable[[], str | None] = lambda: os.environ.get("GEMINI_API_KEY")):
         self.bus, self.audit, self.store, self.secrets, self.holder, self.apply, self.env_key = bus, audit, store, secrets, holder, apply, env_key
         self._testing = False
+        self.voice_local_ready = False                                # hay motor Whisper instalado (lo fija app.wire)
 
     def key(self) -> str | None:
         """Prioridad: la clave guardada desde el HUD; si no hay, la del entorno / .env."""
@@ -32,7 +33,7 @@ class ConfigHandlers:
             "api_key": {"configured": bool(key), "source": "almacén" if stored else ("entorno" if env else ""),
                         "hint": SecretStore.hint(key) if key else "", "backend": self.secrets.backend},
             "usage": self.holder.usage(), "llm_ready": self.holder.inner is not None,
-            "fixed": {"kill_hotkey": KILL_HOTKEY},
+            "fixed": {"kill_hotkey": KILL_HOTKEY}, "voice_local_ready": self.voice_local_ready,
         }
 
     def publish(self) -> None:

@@ -84,6 +84,12 @@ export function ConfigPanel({ config, send }: { config: ConfigSnapshot | null; s
         Confirmar las escrituras mientras haya extensiones externas activas <em>(recomendado)</em>
       </label>
 
+      <label className="check">
+        <input type="checkbox" checked={v.voice_local !== false} data-testid="voice-local"
+          onChange={(e) => send({ type: "config.set", values: { voice_local: e.target.checked } })} />
+        Voz local (Whisper): el audio no sale del equipo <em>(si no, se transcribe con Google)</em>
+      </label>
+
       <h3>Lo que hemos gastado</h3>
       <table className="usage" data-testid="usage">
         <thead><tr><th></th><th>llamadas</th><th>entrada</th><th>salida</th></tr></thead>

@@ -81,7 +81,7 @@ export default function App() {
           ))}
         </nav>
         {state.notice && <div className={`notice ${state.notice.level}`} role="status" data-testid="notice">{state.notice.text}</div>}
-        {tab === "consola" && <VoiceBar voice={voice} />}
+        {tab === "consola" && <VoiceBar voice={voice} local={!!state.config?.values.voice_local && !!state.config?.voice_local_ready} />}
         {tab === "consola" && <Console chat={state.chat} disabled={state.conn !== "open"} onSubmit={submitTask} />}
         {tab === "memoria" && <MemoryPanel memory={state.memory} send={send} />}
         {tab === "permisos" && <PermissionsPanel perms={state.permissions} broker={state.broker} send={send} />}

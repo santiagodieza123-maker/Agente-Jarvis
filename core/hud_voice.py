@@ -1,6 +1,7 @@
 """Voz a texto para el HUD: recibe un fragmento de audio (WAV de unos segundos), lo transcribe con el modelo y devuelve el texto.
 El texto es una entrada del usuario, como si lo hubiera escrito: pasa por la política y las confirmaciones igual que cualquier tarea.
-El audio nunca se guarda en disco ni en el log; se envía a Google (Gemini) para transcribirlo."""
+El audio nunca se guarda en disco ni en el log. Con Whisper local (ajuste voice_local) no sale del equipo; si no, se envía a
+Google (Gemini) para transcribirlo. Si se eligió local y falla, NO se recurre a Google: se informa del error."""
 from __future__ import annotations
 
 import asyncio
@@ -19,8 +20,9 @@ SILENCE = "[silencio]"
 
 
 class VoiceHandlers:
-    def __init__(self, bus: EventBus, audit, holder: LLMHolder, clock=time.monotonic):
+    def __init__(self, bus: EventBus, audit, holder: LLMHolder, clock=time.monotonic, local=None, use_local=lambda: False):
         self.bus, self.audit, self.holder, self.clock = bus, audit, holder, clock
+        self.local, self.use_local = local, use_local          # motor local (LocalWhisper) y si el usuario lo prefiere
         self._recent: deque = deque()
 
     def _out(self, rid: str, **kw) -> None:
@@ -46,15 +48,17 @@ class VoiceHandlers:
         if len(audio) < 1000:
             self._out(rid, text="", silent=True)                     # fragmento diminuto: ni se envía
             return True
-        now = self.clock()
-        while self._recent and now - self._recent[0] > 60:
-            self._recent.popleft()
-        if len(self._recent) >= MAX_PER_MINUTE:
-            self._out(rid, error="demasiadas transcripciones por minuto; espera un momento")
-            return True
-        self._recent.append(now)
+        engine = self.local if (self.local is not None and self.use_local()) else None
+        if engine is None:                                            # el límite protege la cuota de la API; en local no hace falta
+            now = self.clock()
+            while self._recent and now - self._recent[0] > 60:
+                self._recent.popleft()
+            if len(self._recent) >= MAX_PER_MINUTE:
+                self._out(rid, error="demasiadas transcripciones por minuto; espera un momento")
+                return True
+            self._recent.append(now)
         try:
-            r = await asyncio.to_thread(self.holder.transcribe, audio, mime)
+            r = await asyncio.to_thread(engine.transcribe if engine else self.holder.transcribe, audio, mime)
         except NoLLM as e:
             self._out(rid, error=str(e))
             return True
@@ -63,6 +67,6 @@ class VoiceHandlers:
             return True
         text = r.text.strip()
         silent = (not text) or text.lower().strip("[]. ") == "silencio"
-        self.audit.append("voice.transcribed", bytes=len(audio), chars=0 if silent else len(text))      # nunca el audio ni, aquí, el texto
+        self.audit.append("voice.transcribed", bytes=len(audio), engine="local" if engine else "gemini", chars=0 if silent else len(text))      # nunca el audio ni, aquí, el texto
         self._out(rid, text="" if silent else text[:2000], silent=silent)
         return True

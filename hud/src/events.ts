@@ -85,6 +85,7 @@ export function asPermissions(p: Record<string, unknown>): PermissionsSnapshot |
 export interface ConfigValues {
   model: string; max_steps: number; max_failures: number; approval_timeout: number;
   token_budget: number; browser_headed: boolean; accent: string; confirm_with_extensions?: boolean;
+  voice_local?: boolean;
 }
 export interface Bucket { calls: number; input: number; output: number }
 export interface ConfigSnapshot {
@@ -93,6 +94,7 @@ export interface ConfigSnapshot {
   accents: string[];
   restart: string[];
   api_key: { configured: boolean; source: string; hint: string; backend: string };
+  voice_local_ready?: boolean;
   usage: { calls: number; input: number; output: number; today?: Bucket; total?: Bucket };
   llm_ready: boolean;
   fixed: { kill_hotkey: string };

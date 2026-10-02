@@ -266,3 +266,34 @@ def test_recipe_args_are_none_for_unnamed_elements():
     run(g.observe())
     r = run(g.click(id=7))
     assert r.recipe_args is None
+
+
+class FakeVision:
+    def __init__(self):
+        from perception.omniparser import VisualElement
+        self.items = [VisualElement(1, "Jugar", (40, 40, 60, 60), 0.9), VisualElement(2, "Opciones", (100, 100, 140, 120), 0.8)]
+
+    def parse(self, png, captions=True):
+        return self.items
+
+
+def test_detect_and_click_visual():
+    be = app()
+    g = GuiTools(be, on_frame=None, settle=0, vision=FakeVision())
+    ts = {t.name: t for t in g.tools()}
+    from core.policy import ActionClass as C
+    assert ts["gui.detect"].cls is C.READ and ts["gui.click_visual"].cls is C.WRITE_REVERSIBLE
+    assert not run(g.click_visual(1)).ok                                 # sin detección previa
+    r = run(g.detect())
+    assert '[v1] "Jugar"' in r and r.image
+    l, t = g._snap.window.rect[:2]
+    assert not run(g.click_visual(9)).ok
+    res = run(g.click_visual(1))
+    assert res.ok and ("click_xy", l + 50, t + 50) in be.log
+    assert not run(g.click_visual(2)).ok                                 # tras actuar, hay que volver a detectar
+
+
+def test_dedupe_drops_nested_boxes():
+    from perception.omniparser import dedupe
+    kept = dedupe([((0, 0, 100, 100), 0.5), ((10, 10, 20, 20), 0.9), ((200, 200, 220, 220), 0.3)])
+    assert [r for r, _ in kept] == [(10, 10, 20, 20), (200, 200, 220, 220)]

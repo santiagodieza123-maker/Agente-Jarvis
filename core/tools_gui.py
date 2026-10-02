@@ -42,9 +42,10 @@ def is_protected(w: WindowInfo) -> bool:
 
 
 class GuiTools:
-    def __init__(self, backend: GuiBackend, on_frame: Callable[[dict], None] | None = None, settle: float = 0.4):
-        self.backend, self.on_frame, self.settle = backend, on_frame, settle
+    def __init__(self, backend: GuiBackend, on_frame: Callable[[dict], None] | None = None, settle: float = 0.4, vision=None):
+        self.backend, self.on_frame, self.settle, self.vision = backend, on_frame, settle, vision
         self._snap: Snapshot | None = None
+        self._visual: tuple[Snapshot, list[Element]] | None = None      # última detección visual (rects absolutos)
 
     # ---------- utilidades ----------
     async def _bk(self, fn, *args):
@@ -206,6 +207,47 @@ class GuiTools:
         await self._bk(self.backend.press, combo)
         return await self._after(f"Tecla {combo}", None, before)
 
+    async def detect(self, window: str = "", captions: bool = True) -> GuiResult:
+        """Detección visual (OmniParser) sobre la captura de la ventana: para lo que UI Automation no ve."""
+        w = await self._pick(window)
+        snap = await self._observe(w)
+        r = snap.window.rect
+        if not (r[2] > r[0] and r[3] > r[1]):
+            return GuiResult("La ventana no tiene un área visible que capturar.", False)
+        try:
+            png = await self._bk(self.backend.screenshot, r)
+        except Exception as e:  # noqa: BLE001
+            return GuiResult(f"No se pudo capturar la ventana: {e}", False)
+        found = await asyncio.to_thread(self.vision.parse, png, bool(captions))
+        els = [Element(id=v.id, name=v.label or "(sin descripción)", role="button",
+                       rect=(v.rect[0] + r[0], v.rect[1] + r[1], v.rect[2] + r[0], v.rect[3] + r[1])) for v in found]
+        self._visual = (snap, els)
+        vsnap = Snapshot(snap.seq, snap.window, els)
+        if self.on_frame is not None:
+            try:
+                self.on_frame(await asyncio.to_thread(som.hud_frame, png, vsnap, (r[0], r[1]), None, "detección visual"))
+            except Exception:
+                pass
+        img = await asyncio.to_thread(som.annotate, png, vsnap, (r[0], r[1]))
+        lines = [f'DETECCIÓN VISUAL de "{w.title}" ({len(els)} elementos; las descripciones son aproximadas, compruébalas en la imagen):']
+        lines += [f'[v{e.id}] "{e.name}" en {e.center}' for e in els]
+        return GuiResult("\n".join(lines) if els else "No se detectó ningún elemento visual.", True, img)
+
+    async def click_visual(self, id: int) -> GuiResult:
+        if self._visual is None:
+            return GuiResult("No hay detección visual previa: usa gui.detect.", False)
+        snap, els = self._visual
+        if self._snap is None or self._snap.window.handle != snap.window.handle or self._snap.window.rect != snap.window.rect:
+            return GuiResult("La ventana cambió o se movió desde la detección: vuelve a usar gui.detect.", False)
+        n = str(id).lstrip("vV")
+        el = next((e for e in els if str(e.id) == n), None)
+        if el is None:
+            return GuiResult(f"No existe el elemento visual v{n}; vuelve a usar gui.detect.", False)
+        x, y = el.center
+        res = await self.click_xy(x, y)
+        self._visual = None                                              # tras actuar, las posiciones ya no son fiables
+        return GuiResult(f'Clic visual en v{n} "{el.name}". ' + res, res.ok)
+
     async def click_xy(self, x: int, y: int) -> GuiResult:
         """Último recurso cuando UI Automation no expone el control. Coordenadas físicas del escritorio; solo dentro de la ventana observada."""
         if self._snap is None:
@@ -233,5 +275,9 @@ class GuiTools:
             Tool("gui.click", W, self.click, "Pulsa un elemento: por su número (id, de la última observación) o por name (+role, nth si hay varios iguales). Devuelve la ventana tras la acción", True, verify=ver, parameters=p(id="integer", name="string", role="string", nth="integer")),
             Tool("gui.type", W, self.type, "Escribe texto en un campo (por id o por name/role); submit=true pulsa Enter después", True, verify=ver, parameters=p(("text",), text="string", id="integer", name="string", role="string", nth="integer", submit="boolean")),
             Tool("gui.press", W, self.press, "Pulsa una tecla o combinación segura (enter, tab, esc, flechas, ctrl+a/c/v/x/z/y/s/f, f1..f12…)", True, verify=ver, parameters=p(("keys",), keys="string")),
+            *([Tool("gui.detect", R, self.detect, "Detección VISUAL de botones e iconos en una ventana (juegos, apps de dibujo, Electron…) cuando gui.observe no muestra el control. Devuelve elementos v1, v2… con captura anotada. Tarda unos segundos", True,
+                    parameters=p(window="string", captions="boolean")),
+               Tool("gui.click_visual", W, self.click_visual, "Pulsa un elemento de la última gui.detect por su número (1 para v1)", True, verify=ver,
+                    parameters=p(("id",), id="integer"))] if self.vision is not None else []),
             Tool("gui.click_xy", D, self.click_xy, "ÚLTIMO RECURSO: clic en coordenadas de pantalla dentro de la ventana observada, solo si el elemento no aparece numerado", True, verify=ver, parameters=p(("x", "y"), x="integer", y="integer")),
         ]

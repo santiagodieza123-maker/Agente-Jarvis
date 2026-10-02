@@ -24,9 +24,11 @@ SPEC: dict[str, tuple] = {
     "browser_headed": (bool, None, None, True),
     "confirm_with_extensions": (bool, None, None, False),
     "accent": (str, None, None, False),
+    "voice_local": (bool, None, None, False),
 }
 DEFAULTS = {"model": "gemini-3.1-flash-lite", "max_steps": 15, "max_failures": 3, "approval_timeout": 120,
-            "token_budget": 0, "browser_headed": False, "accent": "ámbar", "confirm_with_extensions": True}
+            "token_budget": 0, "browser_headed": False, "accent": "ámbar", "confirm_with_extensions": True,
+            "voice_local": True}
 
 
 class SettingsError(ValueError):

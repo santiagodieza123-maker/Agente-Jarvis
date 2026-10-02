@@ -63,6 +63,12 @@ rellenan; el HUD de Jarvis es invisible e intocable para el agente (la ventana t
 «Permitir»); `gui.press` solo admite una lista de teclas/combinaciones seguras; `gui.click_xy` es DESTRUCTIVA (siempre confirma). La pestaña VISIÓN muestra la
 captura con las cajas numeradas y la acción en curso.
 
+**Detección visual (OmniParser v2).** `pip install -e .[vision]` (con torch CUDA: `pip install torch --index-url https://download.pytorch.org/whl/cu128`).
+Añade `gui.detect` (YOLO localiza botones/iconos en la captura de la ventana y Florence-2 los describe → elementos `v1`, `v2`… con imagen anotada) y
+`gui.click_visual` (clic en el centro de un `vN`, con las mismas protecciones que `gui.click_xy`; tras actuar hay que volver a detectar). Para juegos, apps de
+dibujo y Electron sin árbol de accesibilidad. Pesos (~1 GB, `microsoft/OmniParser-v2.0`; icon_detect AGPL-3.0, icon_caption MIT) en `~/.jarvis/models/omniparser`,
+descargados la primera vez. Recomendado GPU NVIDIA; en CPU funciona pero tarda.
+
 ### Recetas ejecutables
 En MEMORIA, un episodio terminado puede guardarse como receta («Guardar receta»; solo el usuario, no el agente). Los pasos GUI se guardan por nombre/rol/orden, no por
 número. Se pueden parametrizar con `{{parametro}}` (con valor por defecto) y añadir precondiciones (`path_exists`, `window_contains`). Reproducir una receta **no llama al
@@ -71,8 +77,10 @@ receta no concede permisos. Si se creó tras leer contenido no confiable se marc
 
 ### Voz
 Pulsar para hablar (Ctrl+Espacio) o escucha continua que solo actúa ante «Jarvis, …». Indicador de micrófono siempre visible; la voz de respuesta usa la síntesis del
-navegador (voz y velocidad configurables) y el nivel del micrófono mueve el orbe. **Privacidad:** el audio de cada frase se envía a Google (Gemini) para transcribirlo;
-el núcleo lo limita a WAV ≤4 MB, 20 peticiones/min, y no guarda ni audita el audio ni el texto (solo bytes y caracteres).
+navegador (voz y velocidad configurables) y el nivel del micrófono mueve el orbe. **Privacidad:** con `pip install -e .[voice]` el audio se transcribe
+en local con Whisper (faster-whisper; `large-v3-turbo` en GPU, `small` en CPU; `JARVIS_WHISPER_MODEL`/`JARVIS_WHISPER_LANG`) y no sale del equipo; ajuste «Voz local»
+en CONFIG (activo por defecto; si falla no recurre a Google). Sin Whisper o con el ajuste desactivado, el audio se envía a Google (Gemini), limitado a 20 peticiones/min.
+El núcleo acepta WAV ≤4 MB y no guarda ni audita el audio ni el texto (solo bytes y caracteres).
 
 ### Panel SISTEMA y apariencia
 SISTEMA: CPU y memoria de Jarvis y sus hijos, retraso del bucle de eventos, GPU (`nvidia-smi` si existe), latencia y errores del modelo, salud de cada componente (núcleo,
@@ -92,9 +100,8 @@ existe solo para pruebas y no se usa nunca desde el HUD. Fuera de alcance: el es
 - **Comprobado en hardware real** (Windows 11, 1 monitor 1920×1080 al 100 %, integridad Medium): clic exacto con SendInput, watchdog, shell, WebSocket y navegador.
   Solo se soporta/valida un monitor; varios monitores y escalado 125/150 % no están verificados.
 - **Broker comprobado con una persona** (UAC, `ping`, `winget_install` real, `service_control` sobre Spooler, y denegación: al pulsar «No» no se ejecuta nada).
-- La percepción se basa en UI Automation: aplicaciones sin árbol de accesibilidad (juegos, lienzos, algunos Electron) solo se manejan con `gui.click_xy` sobre captura;
-  no hay detección visual de elementos (OmniParser no está integrado).
-- El audio de la voz sale hacia Google; la escucha continua depende de la calidad del micrófono y de la transcripción.
+- La detección visual (OmniParser) no lee texto con OCR: las descripciones de Florence-2 son aproximadas y el modelo debe contrastarlas con la imagen.
+- Sin Whisper local, el audio de la voz sale hacia Google; la escucha continua depende de la calidad del micrófono y de la transcripción.
 - Un `shell.exec` aprobado por ti puede hacer lo que tu usuario puede hacer: la barrera es tu confirmación.
 
 ## Extensiones (MCP)

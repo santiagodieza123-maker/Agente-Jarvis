@@ -2,7 +2,7 @@ import type { useVoice } from "../voice/useVoice";
 
 type Voice = ReturnType<typeof useVoice>;
 
-export function VoiceBar({ voice }: { voice: Voice }) {
+export function VoiceBar({ voice, local = false }: { voice: Voice; local?: boolean }) {
   if (!voice.supported) return <div className="voicebar"><p className="hint" data-testid="voice-unsupported">La voz no está disponible: este equipo no permite capturar el micrófono.</p></div>;
   const rec = voice.ptt || voice.wake;
   return (
@@ -26,7 +26,7 @@ export function VoiceBar({ voice }: { voice: Voice }) {
         </div>
       )}
       {voice.error && <p className="warn" role="alert" data-testid="voice-error" onClick={voice.dismissError}>{voice.error}</p>}
-      <p className="hint">El audio se envía a Google (Gemini) solo para transcribirlo; no se guarda. Lo dicho se trata como si lo hubieras escrito: pasa por los mismos permisos y confirmaciones.</p>
+      <p className="hint">{local ? "El audio se transcribe en este equipo (Whisper); no sale de él ni se guarda." : "El audio se envía a Google (Gemini) solo para transcribirlo; no se guarda."} Lo dicho se trata como si lo hubieras escrito: pasa por los mismos permisos y confirmaciones.</p>
     </div>
   );
 }

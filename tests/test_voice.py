@@ -154,3 +154,40 @@ def test_server_accepts_large_voice_frames():
         await srv.stop()
         return got
     assert asyncio.run(go()) == [3 * 1024 * 1024]
+
+
+class FakeLocal:
+    def __init__(self, text="hola local"):
+        self.text, self.calls = text, 0
+
+    def transcribe(self, audio, mime):
+        self.calls += 1
+        return LLMResponse(text=self.text)
+
+
+def test_local_engine_is_used_when_enabled_and_skips_rate_limit(tmp_path):
+    from core.hud_voice import VoiceHandlers
+    llm, loc, pref = Fake("nube"), FakeLocal(), {"v": True}
+    h, q = build(tmp_path, llm)
+    vh = VoiceHandlers(EventBus(), AuditLog(tmp_path / "b.jsonl"), h.config.holder, local=loc, use_local=lambda: pref["v"])
+    vq = vh.bus.subscribe()
+    for i in range(MAX_PER_MINUTE + 3):
+        asyncio.run(vh({"type": "voice.transcribe", "id": f"l{i}", "audio": B64}))
+    assert loc.calls == MAX_PER_MINUTE + 3 and llm.calls == []
+    assert out(vq)[-1] == {"id": f"l{MAX_PER_MINUTE + 2}", "text": "hola local", "silent": False}
+    assert '"engine": "local"' in (tmp_path / "b.jsonl").read_text()
+    pref["v"] = False
+    asyncio.run(vh({"type": "voice.transcribe", "id": "g", "audio": B64}))
+    assert out(vq)[-1]["text"] == "nube" and len(llm.calls) == 1
+
+
+def test_local_engine_failure_never_falls_back_to_cloud(tmp_path):
+    from core.hud_voice import VoiceHandlers
+    llm = Fake("nube")
+    h, _ = build(tmp_path, llm)
+    loc = FakeLocal()
+    loc.transcribe = lambda a, m: (_ for _ in ()).throw(RuntimeError("sin CUDA"))
+    vh = VoiceHandlers(EventBus(), AuditLog(tmp_path / "b.jsonl"), h.config.holder, local=loc, use_local=lambda: True)
+    vq = vh.bus.subscribe()
+    asyncio.run(vh({"type": "voice.transcribe", "id": "x", "audio": B64}))
+    assert "sin CUDA" in out(vq)[-1]["error"] and llm.calls == []

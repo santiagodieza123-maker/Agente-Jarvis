@@ -12,6 +12,8 @@ dependencies = ["pydantic>=2", "websockets>=13", "langgraph>=1.0", "pillow>=10",
 windows = ["uiautomation", "comtypes", "keyring"]
 mcp = ["mcp>=1.2"]
 web = ["playwright>=1.56"]   # luego: playwright install chromium
+voice = ["faster-whisper>=1.1"]          # Whisper local; GPU: torch CUDA (aporta cuBLAS/cuDNN)
+vision = ["ultralytics>=8.3", "transformers>=4.45,<4.50", "einops", "timm", "huggingface_hub", "torch"]
 dev = ["pytest"]
 
 [tool.setuptools]
