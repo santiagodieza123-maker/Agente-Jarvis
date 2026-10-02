@@ -123,3 +123,21 @@ def test_disabled_tool_is_hidden_from_llm_and_rejected(tmp_path):
     asyncio.run(o.run("x"))
     assert l.offered[0] == {"fs.list"} and ran == []     # no se ofrece y, si lo pide igualmente, se rechaza
     assert "NOTAS: usa español" in l.sys
+
+
+def test_autonomous_mode_allows_everything_except_protected(tmp_path):
+    store, policy, fs, ws = build(tmp_path)
+    other = tmp_path / "otra"; other.mkdir()
+    store.set_autonomous(True)
+    for cls in C:
+        assert policy.evaluate(Action("x", cls, O.OBSERVED, str(other / "f.txt"))) is D.ALLOW
+    assert fs.write(str(other / "f.txt"), "hola").startswith("escrito")
+    assert policy.evaluate(Action("x", C.READ, O.USER, str(tmp_path / "home" / "secrets.json"))) is D.DENY
+    with pytest.raises(PermissionError):
+        fs.read(str(tmp_path / "home" / "permissions.json"))
+    # persiste y se desactiva
+    store2, policy2, *_ = build(tmp_path)
+    assert store2.autonomous and policy2.autonomous
+    store2.set_autonomous(False)
+    assert policy2.evaluate(Action("x", C.DESTRUCTIVE, O.USER, str(ws / "a"))) is D.CONFIRM
+    assert policy2.evaluate(Action("x", C.READ, O.USER, str(other / "f.txt"))) is D.DENY

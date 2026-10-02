@@ -19,7 +19,7 @@ Pruebas portables: `pip install -e .[dev] && pytest`. El código Win32 requiere 
 Arranque con un solo comando: `python tools/launch.py`. Lanza el núcleo (bajo el watchdog en Windows), espera `JARVIS_READY`
 y abre el HUD de Tauri entregándole puerto y token por su **entrada estándar** (una línea JSON): no quedan en argv ni en el entorno del proceso,
 donde otro proceso del mismo usuario podría leerlos; la clave de Gemini tampoco llega al HUD. Al cerrar el HUD el lanzador detiene el núcleo
-(en Windows, el Job Object del watchdog mata además a todos sus hijos). Opciones: `--hud RUTA` o `JARVIS_HUD_BIN`, `--no-watchdog`, `--browser`.
+(en Windows, el Job Object del watchdog mata además a todos sus hijos). Opciones: `--hud RUTA` o `JARVIS_HUD_BIN`, `--no-watchdog`, `--browser`, `--no-admin` (en Windows el lanzador se eleva como administrador por defecto; para abrirlo sin aviso UAC ejecuta una vez `toolsinstall_admin_shortcut.ps1` como administrador: crea la tarea programada «Jarvis» y un acceso directo en el escritorio).
 
 Compilar el HUD: `cd hud && npm install && npm run tauri build` (el lanzador detecta `hud/src-tauri/target/release/jarvis-hud[.exe]`).
 Desarrollo en navegador: `cd hud && npm run dev` y `python tools/launch.py --browser` (imprime y abre la URL con puerto y token).
@@ -137,10 +137,13 @@ pensamiento); con historial en texto el modelo imitaba el formato en lugar de ll
 ## Memoria y permisos (HUD)
 Pestañas MEMORIA y PERMISOS. Se guardan en `~/.jarvis` (`JARVIS_HOME`): `memory.db` (SQLite) y `permissions.json`.
 - **Memoria:** notas (preferencia/dato) que solo el usuario crea desde el HUD y que Jarvis recibe como contexto (no como órdenes); historial de tareas.
-  El agente no puede escribir memoria por su cuenta (evita envenenarla con contenido leído de la web).
+  El agente puede guardar notas con `memory.remember` (escritura reversible); si ya leyó contenido no confiable, pide confirmación (evita envenenarla).
 - **Permisos:** confirmación por clase (lectura y escritura reversible configurables; destructiva y elevada **siempre** piden confirmación),
   herramientas activables y carpetas accesibles. Se rechazan carpetas demasiado amplias, del sistema, tu carpeta personal y la del repo/config
   de Jarvis (contienen la clave y los permisos). Ninguna herramienta del agente puede modificar estos ajustes.
+- **Modo autónomo** (casilla en LLAVES, desactivado por defecto): ninguna acción pide confirmación —tampoco destructivas, elevadas ni las
+  originadas por contenido no confiable— y los archivos son accesibles en cualquier ruta salvo el repo y `~/.jarvis`. Todo sigue auditado.
+  Riesgo: una web o archivo con instrucciones ocultas puede hacer que Jarvis actúe sin que lo veas.
 
 ## Auditoría (HUD)
 Pestaña AUDITORÍA sobre `~/.jarvis/audit.jsonl` (cadena de hashes SHA-256): registros en vivo, filtro por evento, búsqueda, exportación,

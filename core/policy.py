@@ -46,16 +46,23 @@ class Policy:
         ActionClass.DESTRUCTIVE: True,
         ActionClass.ELEVATED: True,
     })
+    # Modo autónomo (solo se activa desde el HUD): sin confirmaciones y cualquier ruta salvo `protected`.
+    autonomous: bool = False
+    protected: list[str] = field(default_factory=list)
 
     def _path_allowed(self, path: str) -> bool:
         p = PurePath(path)
         if ".." in p.parts:
             return False
+        if self.autonomous:
+            return not any(p == PurePath(r) or PurePath(r) in p.parents for r in self.protected)
         return any(p == PurePath(r) or PurePath(r) in p.parents for r in self.allowed_roots)
 
     def evaluate(self, a: Action) -> Decision:
         if a.path is not None and not self._path_allowed(a.path):
             return Decision.DENY
+        if self.autonomous:
+            return Decision.ALLOW
         # Contenido no confiable nunca origina acciones que modifican estado por sí solo.
         if a.origin is Origin.OBSERVED and a.cls is not ActionClass.READ:
             return Decision.CONFIRM if a.cls is not ActionClass.ELEVATED else Decision.DENY

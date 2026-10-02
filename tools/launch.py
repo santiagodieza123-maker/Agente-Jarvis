@@ -130,7 +130,18 @@ def run(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-watchdog", action="store_true", help="no usar el watchdog (siempre implícito fuera de Windows)")
     ap.add_argument("--stop-file", help="(pruebas) al aparecer este archivo, el lanzador cierra el HUD y el núcleo")
     ap.add_argument("--timeout", type=float, default=30.0, help="segundos de espera al arranque del núcleo")
+    ap.add_argument("--no-admin", action="store_true", help="(Windows) no relanzar como administrador (por defecto se eleva)")
     args = ap.parse_args(argv)
+
+    if argv is None and not args.no_admin and os.name == "nt" and not args.stop_file:   # solo desde la línea de comandos
+        import ctypes
+        if not ctypes.windll.shell32.IsUserAnAdmin():
+            params = subprocess.list2cmdline([str(Path(__file__).resolve()), *sys.argv[1:]])
+            rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, params, str(Path.cwd()), 1)
+            if rc <= 32:
+                print("Error: no se concedió la elevación (UAC).", file=sys.stderr)
+                return 1
+            return 0
 
     hud_cmd = None if args.browser else find_hud(args.hud)
     if not args.browser and hud_cmd is None:

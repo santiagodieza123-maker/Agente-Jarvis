@@ -46,6 +46,14 @@ export function PermissionsPanel({ perms, broker, send }: { perms: PermissionsSn
   return (
     <section className="panel perms" data-testid="permissions-panel">
       <h2>LLAVES</h2>
+      <label className="grow" title="Sin confirmaciones y acceso a todos tus archivos (salvo los secretos de Jarvis)">
+        <input type="checkbox" checked={!!perms.autonomous} data-testid="autonomous"
+               onChange={(e) => {
+                 if (e.target.checked && !window.confirm("Modo autónomo: Jarvis hará TODO sin preguntarte, incluso borrar archivos y acciones de administrador, también si una web le da instrucciones. ¿Activar?")) return;
+                 send({ type: "permissions.set_autonomous", value: e.target.checked });
+               }} />
+        Modo autónomo (no preguntar nunca, todos los archivos)
+      </label>
       <h3>Antes de hacer esto, pregúntame…</h3>
       <ul>
         {perms.classes.map((c) => (

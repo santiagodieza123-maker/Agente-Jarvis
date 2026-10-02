@@ -20,8 +20,8 @@ from core.memory import Memory
 from core.permissions import REPO, PermissionStore
 from core.llm.holder import LLMHolder
 from core.llm.provider import LLMProvider
-from core.orchestrator import Orchestrator
-from core.policy import Policy
+from core.orchestrator import Orchestrator, Tool
+from core.policy import ActionClass, Policy
 from core.sensitive import sensitive_hits
 from core.usage import UsageStore
 from core.settings import DEFAULTS, SecretStore, SettingsStore
@@ -90,6 +90,12 @@ def wire(llm, bus: EventBus, audit: AuditLog, roots: list[Path],
     tools = {t.name: t for t in (*fs.tools(), *shell.tools(), *web.tools(), *gui_tools, *elevated_tools)}
     policy = Policy(allowed_roots=[str(r.resolve()) for r in roots])
     memory = Memory(home / "memory.db")
+    # El agente puede proponer notas; con contenido no confiable en contexto la política exige confirmación (evita envenenarla).
+    tools["memory.remember"] = Tool(
+        "memory.remember", ActionClass.WRITE_REVERSIBLE, lambda kind, content: f"nota {memory.add(kind, content)} guardada",
+        "Guarda en la memoria persistente una preferencia o dato del usuario (kind: preferencia|dato, content)",
+        parameters={"type": "object", "properties": {"kind": {"type": "string", "enum": ["preferencia", "dato"]},
+                                                     "content": {"type": "string"}}, "required": ["kind", "content"]})
     perms = PermissionStore(home / "permissions.json", policy, fs, roots, tools, protected=[REPO, home])
     settings = SettingsHandlers(bus, audit, memory, perms, export_dir=home / "exports")
     handlers.extra.append(settings)

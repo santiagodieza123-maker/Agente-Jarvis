@@ -1,6 +1,6 @@
 """Permisos configurables y persistentes: confirmación por clase, herramientas habilitadas y raíces de archivos.
 Solo se modifican desde el HUD (canal autenticado); ninguna herramienta del agente puede tocarlos.
-Las clases DESTRUCTIVE/ELEVATED están bloqueadas: siempre piden confirmación."""
+Las clases DESTRUCTIVE/ELEVATED piden confirmación salvo en modo autónomo, que solo el usuario activa desde el HUD."""
 from __future__ import annotations
 
 import json
@@ -26,6 +26,7 @@ class PermissionStore:
         self.protected = [p.resolve() for p in (protected or [REPO, self.path.parent])]
         self.roots: list[Path] = [r.resolve() for r in default_roots]
         self.disabled: set[str] = set()
+        self.autonomous = False
         self._load()
         self._apply()
 
@@ -46,11 +47,12 @@ class PermissionStore:
         for k, v in (d.get("confirm") or {}).items():
             if k in ActionClass._value2member_map_ and ActionClass(k) not in LOCKED_CLASSES and isinstance(v, bool):
                 self.policy.confirm[ActionClass(k)] = v
+        self.autonomous = d.get("autonomous") is True
         self.disabled = {t for t in (d.get("disabled") or []) if isinstance(t, str) and (t in self.tools or t.startswith("mcp."))}
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        data = {"roots": [str(r) for r in self.roots], "disabled": sorted(self.disabled),
+        data = {"roots": [str(r) for r in self.roots], "disabled": sorted(self.disabled), "autonomous": self.autonomous,
                 "confirm": {c.value: v for c, v in self.policy.confirm.items() if c not in LOCKED_CLASSES}}
         fd, tmp = tempfile.mkstemp(dir=self.path.parent, suffix=".tmp")
         with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -60,6 +62,9 @@ class PermissionStore:
     def _apply(self) -> None:
         self.policy.allowed_roots[:] = [str(r) for r in self.roots]
         self.fs.roots[:] = list(self.roots)
+        self.policy.autonomous = self.fs.allow_all = self.autonomous
+        self.policy.protected[:] = [str(p) for p in self.protected]
+        self.fs.protected[:] = list(self.protected)
 
     # --- validación ---
     def _validate_root(self, raw: object, must_exist: bool = True) -> Path:
@@ -97,6 +102,12 @@ class PermissionStore:
         self.policy.confirm[cls] = value
         self._save()
 
+    def set_autonomous(self, value: object) -> None:
+        if not isinstance(value, bool):
+            raise PermissionError_("valor inválido")
+        self.autonomous = value
+        self._apply(); self._save()
+
     def set_tool(self, name: object, enabled: object) -> None:
         if not isinstance(name, str) or name not in self.tools:
             raise PermissionError_(f"herramienta desconocida: {name!r}")
@@ -121,9 +132,10 @@ class PermissionStore:
 
     def snapshot(self) -> dict:
         return {
-            "classes": [{"name": c.value, "confirm": c in LOCKED_CLASSES or self.policy.confirm[c], "locked": c in LOCKED_CLASSES}
-                        for c in ActionClass],
+            "classes": [{"name": c.value, "confirm": not self.autonomous and (c in LOCKED_CLASSES or self.policy.confirm[c]),
+                         "locked": c in LOCKED_CLASSES} for c in ActionClass],
             "tools": [{"name": t.name, "cls": t.cls.value, "enabled": t.name not in self.disabled,
                        "description": t.description} for t in self.tools.values()],
             "roots": [str(r) for r in self.roots],
+            "autonomous": self.autonomous,
         }

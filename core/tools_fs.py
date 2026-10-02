@@ -12,9 +12,15 @@ MAX_READ = 20_000
 class FsTools:
     def __init__(self, roots: list[str | Path]):
         self.roots = [Path(r).resolve() for r in roots]
+        self.allow_all = False                  # modo autónomo: cualquier ruta salvo `protected`
+        self.protected: list[Path] = []
 
     def _safe(self, path: str) -> Path:
         p = Path(path).resolve()
+        if self.allow_all:
+            if any(p == r or r in p.parents for r in self.protected):
+                raise PermissionError(f"ruta protegida (secretos/configuración de Jarvis): {path}")
+            return p
         if not any(p == r or r in p.parents for r in self.roots):
             raise PermissionError(f"ruta fuera de las raíces permitidas: {path}")
         return p

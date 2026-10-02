@@ -34,6 +34,7 @@ export type HudMessage =
   | { type: "permissions.get" }
   | { type: "permissions.set_confirm"; class: string; value: boolean }
   | { type: "permissions.set_tool"; tool: string; enabled: boolean }
+  | { type: "permissions.set_autonomous"; value: boolean }
   | { type: "permissions.add_root"; path: string }
   | { type: "permissions.remove_root"; path: string }
   | { type: "config.get" }
@@ -71,7 +72,7 @@ export interface Recipe { id: number; name: string; goal: string; steps: RecipeS
 export interface MemorySnapshot { notes: Note[]; episodes: Episode[]; kinds: string[]; recipes?: Recipe[]; limits: { content: number; notes: number } }
 export interface PermClass { name: string; confirm: boolean; locked: boolean }
 export interface PermTool { name: string; cls: string; enabled: boolean; description: string }
-export interface PermissionsSnapshot { classes: PermClass[]; tools: PermTool[]; roots: string[] }
+export interface PermissionsSnapshot { classes: PermClass[]; tools: PermTool[]; roots: string[]; autonomous?: boolean }
 
 const isArr = Array.isArray;
 export function asMemory(p: Record<string, unknown>): MemorySnapshot | null {

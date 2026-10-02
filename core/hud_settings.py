@@ -44,6 +44,9 @@ class SettingsHandlers:
             elif kind == "permissions.set_confirm":
                 self.perms.set_confirm(msg.get("class"), msg.get("value"))
                 self.audit.append("permissions.set_confirm", cls=msg.get("class"), value=msg.get("value"))
+            elif kind == "permissions.set_autonomous":
+                self.perms.set_autonomous(msg.get("value"))
+                self.audit.append("permissions.set_autonomous", value=msg.get("value"))
             elif kind == "permissions.set_tool":
                 self.perms.set_tool(msg.get("tool"), msg.get("enabled"))
                 self.audit.append("permissions.set_tool", tool=msg.get("tool"), enabled=msg.get("enabled"))
